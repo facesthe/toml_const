@@ -154,9 +154,18 @@ fn main() -> ExitCode {
         }
     };
 
-    println!("config file currently contains: {:?}", config_contents);
-
-    println!("Hello world!");
+    match update_gitignore_file(
+        &cargo_project_root,
+        toml_config_dir.to_str().unwrap(),
+        &template_name,
+        generated_file.to_str().unwrap(),
+    ) {
+        Ok(_) => (),
+        Err(e) => {
+            println!("Unable to update .gitignore: {}", e);
+            return ExitCode::FAILURE;
+        }
+    }
 
     ExitCode::SUCCESS
 }
@@ -256,6 +265,53 @@ fn create_config_toml_files(
 
         file.write(CONFIG_TOML_BOILERPLATE.as_bytes()).unwrap();
     }
+
+    Ok(())
+}
+
+/// Create or update the gitignore file with new rules
+#[allow(unused)]
+fn update_gitignore_file(
+    project_root: &PathBuf,
+    config_path: &str,
+    template: &str,
+    generated_path: &str,
+) -> Result<(), String> {
+    const GITIGNORE: &'static str = ".gitignore";
+
+    let root_rules = format!(
+        "\n\n# added by {}\n{}\n",
+        env!("CARGO_PKG_NAME"),
+        generated_path,
+    );
+
+    let mut path = project_root.clone();
+    path.push(GITIGNORE);
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+
+    file.write(root_rules.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    let config_rules = format!("# added by {}\n*.toml\n!{}", env!("CARGO_PKG_NAME"), template);
+
+    let mut path = project_root.clone();
+    path.push(config_path);
+    path.push(GITIGNORE);
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .unwrap();
+
+    file.write(config_rules.as_bytes())
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

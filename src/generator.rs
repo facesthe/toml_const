@@ -20,9 +20,17 @@ enum Setting {
 }
 
 /// This is the main codegen function. Run this inside your `build.rs`!
+///
+/// ```rust no-run
+/// use toml_const::run;
+///
+/// // main function of your build.rs
+/// fn main() {
+///     run();
+///     // ... rest of your build script
+/// }
+/// ```
 pub fn run() {
-    // return;
-
     // read in environment variables
     let config_dir = std::env::var(CONFIG_PATH_ENV);
     let template_path = std::env::var(TEMPLATE_ENV);
@@ -267,7 +275,10 @@ mod codegen {
                 .write_all("#[allow(unused)]\nuse std::str::FromStr;\n".as_bytes())
                 .unwrap();
             gen_file
-                .write_all("#[allow(unused)]\nuse toml::value::{Datetime, Date, Time, Offset};\n\n".as_bytes())
+                .write_all(
+                    "#[allow(unused)]\nuse toml::value::{Datetime, Date, Time, Offset};\n\n"
+                        .as_bytes(),
+                )
                 .unwrap();
 
             Self {

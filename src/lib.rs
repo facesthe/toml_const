@@ -1,7 +1,7 @@
 pub mod cli;
 pub mod consts;
 mod generator;
-// mod package_navi;
+mod package_navi;
 
 pub use generator::run;
 

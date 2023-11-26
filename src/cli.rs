@@ -1,8 +1,11 @@
 //! CLI related code, used for generating boilerplate.
 
-use crate::consts::{
-    CONFIG_PATH_ENV, CONFIG_TOML_BOILERPLATE, DEBUG_ENV, DEPLOY_ENV, GENERATED_FILE_PATH_ENV,
-    TEMPLATE_ENV,
+use crate::{
+    consts::{
+        CONFIG_PATH_ENV, CONFIG_TOML_BOILERPLATE, DEBUG_ENV, DEPLOY_ENV, GENERATED_FILE_PATH_ENV,
+        TEMPLATE_ENV,
+    },
+    package_navi::find_cargo_parent,
 };
 use clap::Parser;
 
@@ -36,7 +39,7 @@ pub struct Init {
 
     /// Configuration dir for toml files, relative to the root cargo manifest.
     ///
-    /// The root manifest can differ from the indicated manifest, if it belongs in
+    /// The root manifest can differ from the indicated manifest if it belongs in
     /// a workspace, or is nested as a sub package.
     #[clap(short, long, default_value = ".config/")]
     pub config_path: String,
@@ -75,10 +78,19 @@ pub fn run() -> ExitCode {
     };
 
     // get the package name
-    let package_name = match table.get("package").and_then(|t| t.get("name")).unwrap() {
+    let t = match table.get("package").and_then(|t| t.get("name")) {
+        Some(t) => t,
+        None => {
+            log::error!("Cargo manifest does not have a package name. The manifest specified may be a workspace.");
+
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let package_name = match t {
         Value::String(p) => p,
         _ => {
-            log::error!("Cargo manifest file does not have a package name defined");
+            log::error!("Cargo package name needs to be a string");
             return ExitCode::FAILURE;
         }
     };
@@ -89,7 +101,7 @@ pub fn run() -> ExitCode {
 
     // write env variables into cargo config
     let (cargo_project_root, cargo_dot_config_file, toml_config_dir, generated_file) = {
-        let cargo_project_directory = PathBuf::from_str(&args.manifest_path)
+        let mut cargo_project_directory = PathBuf::from_str(&args.manifest_path)
             .unwrap()
             .canonicalize()
             .unwrap()
@@ -111,10 +123,19 @@ pub fn run() -> ExitCode {
             .unwrap()
             .to_path_buf();
 
-        let mut cargo_config_dir = cargo_project_directory.clone();
+        // the .cargo/config.toml lives in the project root (top level dir that contains a Cargo.toml file)
+        let mut cargo_config_dir = match find_cargo_parent(&cargo_project_directory) {
+            Some(root) => {
+                let root_parent = root.parent().unwrap().to_path_buf();
+                cargo_project_directory = root_parent.clone();
+                root_parent
+            }
+            None => cargo_project_directory.clone(),
+        };
+
         cargo_config_dir.push(".cargo");
 
-        // println!("{:?}", cargo_config_dir);
+        println!("{:?}", cargo_config_dir);
 
         fs::create_dir_all(&cargo_config_dir).unwrap();
 
@@ -126,6 +147,21 @@ pub fn run() -> ExitCode {
             generated_file,
         )
     };
+
+    let relative_root = {
+        let base = PathBuf::from(&args.manifest_path).canonicalize().unwrap();
+        let delta = base
+            .strip_prefix(&cargo_project_root)
+            .unwrap()
+            .iter()
+            .count();
+
+        let res: String = (1..delta).into_iter().map(|_| "../").collect();
+
+        res
+    };
+
+    println!("relative root: {:?}", relative_root);
 
     // println!("{:?}", cargo_dot_config_file);
 
@@ -148,6 +184,7 @@ pub fn run() -> ExitCode {
         &deploy_name,
         toml_config_dir.to_str().unwrap(),
         generated_file.to_str().unwrap(),
+        &relative_root,
     ) {
         Ok(_) => (),
         Err(e) => {
@@ -182,6 +219,7 @@ pub fn run() -> ExitCode {
         }
     };
 
+    // add rules to gitignore
     match update_gitignore_file(
         &cargo_project_root,
         toml_config_dir.to_str().unwrap(),
@@ -198,6 +236,7 @@ pub fn run() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Update the .cargo/config.toml table
 fn update_config_toml(
     toml: &mut toml::Table,
     template: &str,
@@ -205,11 +244,21 @@ fn update_config_toml(
     deploy: &str,
     config_path: &str,
     generated_path: &str,
+    relative_root: &str,
 ) -> Result<(), String> {
+    let actual_config_path = format!("{}{}", relative_root, config_path);
+
     match toml.get_mut("env") {
         Some(e) => {
             if let Value::Table(t) = e {
-                insert_into_env(t, template, debug, deploy, config_path, generated_path);
+                insert_into_env(
+                    t,
+                    template,
+                    debug,
+                    deploy,
+                    &actual_config_path,
+                    generated_path,
+                );
             } else {
                 return Err(format!("key \"env\" not defined as a table"));
             }
@@ -221,7 +270,7 @@ fn update_config_toml(
                 template,
                 debug,
                 deploy,
-                config_path,
+                &actual_config_path,
                 generated_path,
             );
             toml.insert("env".to_string(), Value::Table(env_table));
@@ -298,7 +347,6 @@ fn create_config_toml_files(
 }
 
 /// Create or update the gitignore file with new rules
-#[allow(unused)]
 fn update_gitignore_file(
     project_root: &PathBuf,
     config_path: &str,

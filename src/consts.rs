@@ -10,6 +10,9 @@ pub const CONFIG_PATH_ENV: &'static str = "TOML_CONST_CONFIG_PATH";
 
 pub const GENERATED_FILE_PATH_ENV: &'static str = "TOML_CONST_GENERATED_PATH";
 
+/// Relative path from indicated manifest to actual manifest
+pub const ROOT_MANIFEST_RELATIVE_PATH: &'static str = "TOML_CONST_ROOT_MANIFEST_RELATIVE_PATH";
+
 pub const CONFIG_TOML_BOILERPLATE: &'static str =
     "# this key MUST be present in all configuration files
 use = true

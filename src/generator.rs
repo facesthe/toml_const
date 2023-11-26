@@ -30,11 +30,16 @@ pub fn run() {
     let deploy_path = std::env::var(DEPLOY_ENV);
     let generated_path = std::env::var(GENERATED_FILE_PATH_ENV);
 
-    let (config_dir, template_path, debug_path, deploy_path, generated_path) =
-        match (config_dir, template_path, debug_path, deploy_path, generated_path) {
-            (Ok(path), Ok(temp), Ok(deb), Ok(dep), Ok(gen)) => (path, temp, deb, dep, gen),
-            _ => exit(-1),
-        };
+    let (config_dir, template_path, debug_path, deploy_path, generated_path) = match (
+        config_dir,
+        template_path,
+        debug_path,
+        deploy_path,
+        generated_path,
+    ) {
+        (Ok(path), Ok(temp), Ok(deb), Ok(dep), Ok(gen)) => (path, temp, deb, dep, gen),
+        _ => exit(-1),
+    };
 
     let settings_arr = vec![
         format!("{}/{}", config_dir, template_path),
@@ -117,7 +122,6 @@ pub fn run() {
         ),
     };
 
-
     // codegen
     let mut _wrapper = codegen::CodeGenWrapper::new(generated_path.clone());
 
@@ -133,7 +137,7 @@ pub fn run() {
 
     gen_file.write_all(absolute_gen.as_bytes()).unwrap();
 
-    _wrapper.lazy_static();
+    _wrapper.lazy_static(&mut gen_file);
     gen_file.write_all(hashmap_gen.as_bytes()).unwrap();
 }
 
@@ -200,6 +204,8 @@ fn table_to_flat_hashmap(table: &toml::Table, prefix: Option<&str>) -> HashMap<S
 }
 
 mod codegen {
+    use std::fs::File;
+
     use super::*;
 
     /// Generate literal rust code that represents the object.
@@ -217,7 +223,6 @@ mod codegen {
         lazy_static_used: bool,
     }
 
-
     impl Drop for CodeGenWrapper {
         fn drop(&mut self) {
             if self.lazy_static_used {
@@ -232,17 +237,13 @@ mod codegen {
     }
 
     impl CodeGenWrapper {
-        pub fn lazy_static(&mut self) {
+        pub fn lazy_static(&mut self, gen_file: &mut File) {
             self.lazy_static_used = true;
-
-            let mut gen_file = OpenOptions::new()
-                .append(true)
-                .open(GENERATED_FILE_PATH_ENV)
-                .unwrap();
 
             gen_file
                 .write_all("lazy_static::lazy_static! {\n".as_bytes())
                 .unwrap();
+            gen_file.flush().unwrap();
         }
 
         pub fn new(generated_file: String) -> Self {
@@ -400,7 +401,7 @@ mod codegen {
 
             hash_gen += "]);\n";
             // enclose hashmap into lazy-static wrapper
-            hash_gen = format!("lazy_static::lazy_static!{{\n{}\n}}", hash_gen);
+            // hash_gen = format!("lazy_static::lazy_static!\n{}\n\n", hash_gen);
             hash_gen
         } else {
             let generated_maps = table

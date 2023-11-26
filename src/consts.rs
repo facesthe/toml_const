@@ -11,7 +11,7 @@ pub const CONFIG_PATH_ENV: &'static str = "TOML_CONST_CONFIG_PATH";
 pub const GENERATED_FILE_PATH_ENV: &'static str = "TOML_CONST_GENERATED_PATH";
 
 pub const CONFIG_TOML_BOILERPLATE: &'static str =
-"# this key MUST be present in all configuration files
+    "# this key MUST be present in all configuration files
 use = true
 
 # add your config key-value pairs below:

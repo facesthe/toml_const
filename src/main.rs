@@ -16,23 +16,19 @@ use std::{
 use clap::Parser;
 use toml::Value;
 
-#[derive(Debug, Parser)]
-struct CliArgs {
-    /// Path to Cargo.toml
-    #[clap(value_parser)]
-    manifest_path: String,
-
-    /// Configuration path, relative to $CARGO_MANIFEST_PATH
-    #[clap(short, long, default_value = ".config/")]
-    config_path: String,
-
-    /// Path to generated file, relative to $CARGO_MANIFEST_PATH
-    #[clap(short, long, default_value = "generated.rs")]
-    generated_file_path: String,
-}
+use crate::cli::{CliArgs, MainSubCommands};
+mod cli;
 
 fn main() -> ExitCode {
     let args = CliArgs::parse();
+
+    // we only have one subcommand right now
+    #[allow(irrefutable_let_patterns)]
+    let args = if let MainSubCommands::Init(i) = args.command {
+        i
+    } else {
+        return ExitCode::SUCCESS;
+    };
 
     let cargo_manifest = match fs::read_to_string(&args.manifest_path) {
         Ok(f) => f,
@@ -221,7 +217,6 @@ fn insert_into_env(
 }
 
 /// Creates the boilerplate toml config files that will be used for codegen
-#[allow(unused)]
 fn create_config_toml_files(
     project_root: &PathBuf,
     config_path: &PathBuf,

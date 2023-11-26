@@ -297,7 +297,11 @@ fn update_gitignore_file(
     file.write(root_rules.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    let config_rules = format!("# added by {}\n*.toml\n!{}", env!("CARGO_PKG_NAME"), template);
+    let config_rules = format!(
+        "# added by {}\n*.toml\n!{}",
+        env!("CARGO_PKG_NAME"),
+        template
+    );
 
     let mut path = project_root.clone();
     path.push(config_path);

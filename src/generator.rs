@@ -261,13 +261,13 @@ mod codegen {
                 )
                 .unwrap();
             gen_file
-                .write_all("use std::collections::HashMap;\n".as_bytes())
+                .write_all("#[allow(unused)]\nuse std::collections::HashMap;\n".as_bytes())
                 .unwrap();
             gen_file
-                .write_all("use std::str::FromStr;\n".as_bytes())
+                .write_all("#[allow(unused)]\nuse std::str::FromStr;\n".as_bytes())
                 .unwrap();
             gen_file
-                .write_all("use toml::value::{Datetime, Date, Time, Offset};\n\n".as_bytes())
+                .write_all("#[allow(unused)]\nuse toml::value::{Datetime, Date, Time, Offset};\n\n".as_bytes())
                 .unwrap();
 
             Self {

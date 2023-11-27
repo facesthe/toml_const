@@ -144,7 +144,7 @@ pub fn run() -> ExitCode {
 
         cargo_config_dir.push(".cargo");
 
-        println!("{:?}", cargo_config_dir);
+        // println!("{:?}", cargo_config_dir);
 
         fs::create_dir_all(&cargo_config_dir).unwrap();
 
@@ -365,9 +365,9 @@ fn update_gitignore_file(
 ) -> Result<(), String> {
     const GITIGNORE: &'static str = ".gitignore";
 
-    dbg!(config_dir);
-    dbg!(generated_file_path);
-    dbg!(template_name);
+    // dbg!(config_dir);
+    // dbg!(generated_file_path);
+    // dbg!(template_name);
 
     let generated_file_name = generated_file_path.file_name().unwrap();
 

@@ -15,7 +15,7 @@ pub const ROOT_MANIFEST_RELATIVE_PATH: &'static str = "TOML_CONST_ROOT_MANIFEST_
 
 pub const CONFIG_TOML_BOILERPLATE: &'static str =
     "# this key MUST be present in all configuration files
-use = true
+use = false
 
 # add your config key-value pairs below:
 ";

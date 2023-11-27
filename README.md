@@ -98,7 +98,7 @@ All valid TOML datatypes are generated as compile-time constants, except for arr
 
 Arrays and tables are defined inside a `lazy_static!` wrapper.
 
-All tables are destructured, when possible, to keys that point to their TOML values.
+All tables are destructured, when possible, to keys that point to their TOML values. Namespaces are separated with an underscore "`_`".
 
 For example, this:
 ```toml
@@ -190,3 +190,20 @@ pub static ref TABLE_INNER: HashMap<&'static str, String> = HashMap::from([
 ```
 
 This might be useful when iterating over unknown key-value pairs during runtime. You do lose type information, though.
+
+### Template, debug, deploy
+`toml_const` generates 3 toml files into your root project directory.
+
+The contents from `*.template.toml` is used as a base, matching keys from
+`*.debug.toml` **or** `*.deploy.toml` will override the template values.
+
+Setting the top-level key `use=true` will cause `toml_const`
+to generate code from that particular config file.
+
+| debug use | deploy use | file(s) used |
+| --- | --- | --- |
+| `false` | `false` | template: compilation warning |
+| `false` | `true` | template + deploy |
+| `true` | `false` | template + debug |
+| `true` | `true` | template + deploy |
+

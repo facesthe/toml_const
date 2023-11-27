@@ -1,14 +1,12 @@
 //! Stuff for looking around cargo packages
-#![allow(unused)]
 
 use std::{fs, path::PathBuf, str::FromStr};
 
-use toml::{de::Error, Value};
-
-use crate::cli::MainSubCommands;
+use toml::Value;
 
 /// Cargo manifest feature struct
 #[derive(Clone, Debug)]
+#[allow(unused)]
 struct CargoManifest {
     /// Package name
     package: Option<String>,
@@ -92,6 +90,7 @@ impl FromStr for CargoManifest {
 pub fn find_cargo_parent(start: &PathBuf) -> Option<PathBuf> {
     let full_path = start.canonicalize().ok()?;
 
+    #[allow(unused_assignments)]
     let mut manifest: Option<CargoManifest> = None;
     let mut path: Option<PathBuf> = None;
 
@@ -110,7 +109,7 @@ pub fn find_cargo_parent(start: &PathBuf) -> Option<PathBuf> {
                         // break when encountering workspace manifest
                         path = Some(cargo_path.clone());
                         break;
-                    } else if let Some(x) = m.package {
+                    } else if let Some(_) = m.package {
                         path = Some(cargo_path.clone())
                     }
                 }

@@ -21,7 +21,7 @@ enum Setting {
 
 /// This is the main codegen function. Run this inside your `build.rs`!
 ///
-/// ```rust no-run
+/// ```rust no_run
 /// use toml_const::run;
 ///
 /// // main function of your build.rs

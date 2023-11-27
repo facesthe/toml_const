@@ -33,9 +33,13 @@ pub enum MainSubCommands {
 
 #[derive(Clone, Debug, Parser)]
 pub struct Init {
-    /// Path to Cargo.toml
+    /// Path to Cargo.toml.
     #[clap(value_parser)]
     pub manifest_path: String,
+
+    /// Package name override. Uses the manifest package name by default.
+    #[clap(short, long)]
+    pub package_name: Option<String>,
 
     /// Configuration dir for toml files, relative to the root cargo manifest.
     ///
@@ -44,7 +48,7 @@ pub struct Init {
     #[clap(short, long, default_value = ".config/")]
     pub config_path: String,
 
-    /// Path to generated file, relative to the provided manifest path
+    /// Path to generated file, relative to the provided manifest path.
     #[clap(short, long, default_value = "generated.rs")]
     pub generated_file_path: String,
 }
@@ -87,13 +91,18 @@ pub fn run() -> ExitCode {
         }
     };
 
-    let package_name = match t {
-        Value::String(p) => p,
+    let mut package_name = match t {
+        Value::String(p) => p.clone(),
         _ => {
             log::error!("Cargo package name needs to be a string");
             return ExitCode::FAILURE;
         }
     };
+
+    // override the package name if it is passed
+    if let Some(name_override) = args.package_name {
+        package_name = name_override.clone();
+    }
 
     let template_name = format!("{}.template.toml", package_name);
     let debug_name = format!("{}.debug.toml", package_name);
@@ -110,14 +119,14 @@ pub fn run() -> ExitCode {
             .to_owned();
 
         let mut generated_file = cargo_project_directory.clone();
-        generated_file.push(args.generated_file_path);
+        generated_file.push(&args.generated_file_path);
         generated_file = generated_file
             .strip_prefix(&cargo_project_directory)
             .unwrap()
             .to_path_buf();
 
         let mut toml_config_dir = cargo_project_directory.clone();
-        toml_config_dir.push(args.config_path);
+        toml_config_dir.push(&args.config_path);
         toml_config_dir = toml_config_dir
             .strip_prefix(&cargo_project_directory)
             .unwrap()
@@ -161,9 +170,7 @@ pub fn run() -> ExitCode {
         res
     };
 
-    println!("relative root: {:?}", relative_root);
-
-    // println!("{:?}", cargo_dot_config_file);
+    // println!("relative root: {:?}", relative_root);
 
     let mut config_file = OpenOptions::new()
         .create(true)
@@ -219,13 +226,14 @@ pub fn run() -> ExitCode {
         }
     };
 
-    // add rules to gitignore
-    match update_gitignore_file(
-        &cargo_project_root,
-        toml_config_dir.to_str().unwrap(),
-        &template_name,
-        generated_file.to_str().unwrap(),
-    ) {
+    // add rules to root gitignore
+    let mut config_dir = cargo_project_root.clone();
+    config_dir.push(&args.config_path);
+    let mut generated_dir = PathBuf::from(args.manifest_path);
+    generated_dir.pop();
+    generated_dir.push(&args.generated_file_path);
+
+    match update_gitignore_file(&config_dir, &generated_dir, &template_name) {
         Ok(_) => (),
         Err(e) => {
             log::error!("Unable to update .gitignore: {}", e);
@@ -346,43 +354,54 @@ fn create_config_toml_files(
     Ok(())
 }
 
-/// Create or update the gitignore file with new rules
+/// Create or update the gitignore files with new rules
+/// This will create/update 2 gitignores:
+/// - .config gitignore (for ignoring non-template toml files)
+/// - package gitignore local to MANIFEST_PATH, for ignoring the generated file
 fn update_gitignore_file(
-    project_root: &PathBuf,
-    config_path: &str,
-    template: &str,
-    generated_path: &str,
+    config_dir: &PathBuf,          // path to .config/
+    generated_file_path: &PathBuf, // path to generated file
+    template_name: &str,
 ) -> Result<(), String> {
     const GITIGNORE: &'static str = ".gitignore";
 
-    let root_rules = format!(
+    dbg!(config_dir);
+    dbg!(generated_file_path);
+    dbg!(template_name);
+
+    let generated_file_name = generated_file_path.file_name().unwrap();
+
+    let generated_rules = format!(
         "\n\n# added by {}\n{}\n",
         env!("CARGO_PKG_NAME"),
-        generated_path,
+        generated_file_name.to_str().unwrap_or(""),
     );
 
-    let mut path = project_root.clone();
+    let mut path = generated_file_path.clone();
+    path.pop();
     path.push(GITIGNORE);
 
+    // update .gitignore for generated file
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
         .unwrap();
 
-    file.write(root_rules.as_bytes())
+    file.write(generated_rules.as_bytes())
         .map_err(|e| e.to_string())?;
 
     let config_rules = format!(
         "# added by {}\n*.toml\n!{}",
         env!("CARGO_PKG_NAME"),
-        template
+        template_name
     );
 
-    let mut path = project_root.clone();
-    path.push(config_path);
+    let mut path = config_dir.clone();
+    // path.push(config_path);
     path.push(GITIGNORE);
 
+    // update .gitignore for toml files
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)

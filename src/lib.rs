@@ -2,10 +2,9 @@
 //!
 #![doc = include_str!("../README.md")]
 
-pub mod cli;
 pub mod consts;
 mod generator;
-mod package_navi;
+mod codegen;
 
 pub use generator::run;
 

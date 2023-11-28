@@ -16,12 +16,5 @@ categories = ["config", "development-tools::build-utils"]
 name = "toml_const"
 path = "src/lib.rs"
 
-[[bin]]
-name = "toml_const_codegen"
-path = "src/main.rs"
-
 [dependencies]
 toml = "0.8"
-clap = { version = "4.4", features = [ "derive" ] }
-log = "0.4"
-pretty_env_logger = "0.5"

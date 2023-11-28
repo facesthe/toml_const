@@ -245,6 +245,9 @@ mod codegen {
     }
 
     impl CodeGenWrapper {
+        /// Inserts the "lazy_static!{" macro and its opening brace.
+        ///
+        /// The closing brace is inserted when the object is dropped.
         pub fn lazy_static(&mut self, gen_file: &mut File) {
             self.lazy_static_used = true;
 

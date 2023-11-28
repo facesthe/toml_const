@@ -1,11 +1,15 @@
 # toml_const
+
 TOML compile-time constants
 
 ## Getting started
+
 Add these in your `Cargo.toml` file:
+
 ```toml
 build = "build.rs"
 
+# if building from source
 [[bin]]
 name = "toml_const_gen"
 path = "src/toml_const_gen.rs"
@@ -13,15 +17,16 @@ path = "src/toml_const_gen.rs"
 [dependencies]
 toml = "0.8"
 lazy_static = "1.4"
-toml_const = { git = "https://github.com/cruzerngz/toml_const.git" }
+toml_const = "0.1"
 
 [build-dependencies]
-toml_const = { git = "https://github.com/cruzerngz/toml_const.git" }
-# crate not published on crates.io yet!
-# toml_const = "0.1"
+toml_const = "0.1"
 ```
 
+### Building from source
+
 Create a new binary file `src/toml_const_gen.rs` with the following code:
+
 ```rust
 use std::process::ExitCode;
 
@@ -36,16 +41,27 @@ fn main() -> ExitCode {
 ```
 
 Run the binary. MANIFEST_PATH is the path to your Cargo.toml package manifest:
+
 ```sh
 # run "cargo run... -- init --help" to see more arguments
 cargo run --bin toml_const_gen -- init <MANIFEST_PATH>
 ```
 
+### Install from crates.io
+
+Alternatively, you can install `toml_const_gen`.
+
+```sh
+cargo install toml_const
+toml_const_gen init <MANIFEST_PATH>
+```
+
 The binary will create and configure some files.
 
 Create a build script, `build.rs`, in the same directory as Cargo.toml:
+
 ```rust
-// build.rs code
+// inside build.rs
 fn main() {
     toml_const::run();
 
@@ -55,6 +71,7 @@ fn main() {
 ```
 
 Your package should now look like this:
+
 ```sh
 package
 ├── build.rs
@@ -70,15 +87,17 @@ package
 ├── .gitignore
 └── src
     ├── main.rs
-    └── toml_const_gen.rs
+    └── toml_const_gen.rs # if you build from source
 ```
 
-The generated file `generated.rs` can now be included into your code:
+`generated.rs` can now be included into your code:
+
 ```rust
-include!("../generated.rs") // include in main
+include!("../generated.rs") // included in main, for example
 ```
 
-It is recommended include this file in a separate module:
+It is recommended to include this file in a separate module:
+
 ```rust
 // inside main.rs / lib.rs
 mod consts;
@@ -89,18 +108,21 @@ include!("../generated.rs")
 ```
 
 And then use it:
+
 ```rust
-let this = consts::USE; // the USE const must always be defined
+let this: bool = consts::USE; // the USE const must always be defined
 ```
 
-## Usage
-All valid TOML datatypes are generated as compile-time constants, except for arrays and tables.
+## Explanation
+
+All valid TOML datatypes are generated as compile-time constants, except for tables/arrays that contain inner tables/arrays.
 
 Arrays and tables are defined inside a `lazy_static!` wrapper.
 
 All tables are destructured, when possible, to keys that point to their TOML values. Namespaces are separated with an underscore "`_`".
 
-For example, this:
+## Example
+
 ```toml
 [table]
 field = "string"
@@ -111,18 +133,100 @@ integer = 3
 field = "another string"
 datetime = 1979-05-27 07:32:00Z
 one_billion = 1e09
+
+[table.other]
+normal_array = [1, 2, 3, 4, 5, 6]
+
+[[arr_of_tables]]
+this = "foo"
+that = "bar"
+
+[[arr_of_tables]]
+this = "fizz"
+that = "buzz"
+
+[[arr_of_tables]]
+this = "pee"
+that = "poo"
 ```
 
-Turns to this:
+### Destructured variables
+
+```rust
+// destructured first table
+let f: &str = TABLE_FIELD;
+let t: toml::value::Datetime = TABLE_TIME;
+let i: i64 = TABLE_INTEGER;
+
+// destructured second table
+let tif: &str = TABLE_INNER_FIELD;
+let tidt: toml::value::Datetime = TABLE_INNER_DATETIME;
+let tib: i64 = TABLE_INNER_ONE_BILLION;
+```
+
+### Tables
+Last-level tables, or tables that do not contain inner tables or arrays, also have their key-value pairs stored as a `HashMap<&'static str, String>`:
+```rust
+/// `table` does not have an associated hashmap, as it contains
+/// an inner table `table.inner`.
+///
+/// The associatd hashmap for `table.inner` is TABLE_INNER.
+let ht: &HashMap<&'static str, String> = &*TABLE_INNER;
+
+// hashmaps lose type-specific information
+let tif_string: &str = TABLE_INNER.get("FIELD").unwrap();
+let tidt_string: &str = TABLE_INNER.get("DATETIME").unwrap();
+let tib_string: &str = TABLE_INNER.get("ONE_BILLION").unwrap();
+
+// but you can iterate over them at runtime
+for key in TABLE_INNER.keys() {
+    // ...
+}
+```
+
+### Arrays
+Arrays can also be used. The type for all elements is inferred from the first element.
+```rust
+// iterate over array elements
+for item: &i64 in TABLE_OTHER_NORMAL_ARRAY.iter() {
+}
+
+// iterate over array of tables
+for subtable: &HashMap<&'static str, String> in ARR_OF_TABLES.iter() {
+
+}
+```
+
+<details>
+<summary>Generated code</summary>
+
 ```rust
 // ...imports excluded
 
-/// type: i64
-pub const TABLE_INTEGER: i64 = (3_i64);
-/// type: f64
-pub const TABLE_INNER_ONE_BILLION: f64 = (1000000000_f64);
 /// type: &'static str
 pub const TABLE_INNER_FIELD: &'static str = "another string";
+/// type: f64
+pub const TABLE_INNER_ONE_BILLION: f64 = (1000000000_f64);
+/// type: i64
+pub const TABLE_INTEGER: i64 = (3_i64);
+lazy_static::lazy_static! {
+/// type: [HashMap<&'static str, String>; 3]
+pub static ref ARR_OF_TABLES: [HashMap<&'static str, String>; 3] = [
+HashMap::from([
+("that", "bar".to_string()),("this", "foo".to_string()),])
+,
+HashMap::from([
+("that", "buzz".to_string()),("this", "fizz".to_string()),])
+,
+HashMap::from([
+("that", "poo".to_string()),("this", "pee".to_string()),])
+
+];
+}
+/// type: &'static str
+pub const TABLE_FIELD: &'static str = "string";
+/// type: bool
+pub const USE: bool = false;
 /// type: Datetime
 pub const TABLE_TIME: Datetime = Datetime {
     date: None,
@@ -134,8 +238,17 @@ pub const TABLE_TIME: Datetime = Datetime {
     }),
     offset: None,
 };
-/// type: &'static str
-pub const TABLE_FIELD: &'static str = "string";
+lazy_static::lazy_static! {
+/// type: [i64; 6]
+pub static ref OTHER_NORMAL_ARRAY: [i64; 6] = [
+(1_i64),
+(2_i64),
+(3_i64),
+(4_i64),
+(5_i64),
+(6_i64)
+];
+}
 /// type: Datetime
 pub const TABLE_INNER_DATETIME: Datetime = Datetime {
     date: Some(Date {
@@ -151,59 +264,34 @@ pub const TABLE_INNER_DATETIME: Datetime = Datetime {
     }),
     offset: Some(Offset::Z),
 };
-```
-
-Toml key `table.time` is is converted to `TABLE_TIME`.
-
-A nested table value `table.inner.one_billion` is destructured to `TABLE_INNER_ONE_BILLION`.
-
-Additionally, last-level tables, or tables that do not contain inner tables or arrays, also have their key-value pairs stored as a `HashMap<&'static str, String>`:
-```rust
-// `table` contains the `inner` table
-// so it is not a last-level table.
-//
-// HashMaps and arrays are wrapped in lazy_static!{...}
-
+lazy_static::lazy_static! {
 /// type: HashMap<&'static str, String>
 pub static ref TABLE_INNER: HashMap<&'static str, String> = HashMap::from([
-    (
-        "DATETIME",
-        Datetime {
-            date: Some(Date {
-                year: 1979,
-                month: 5,
-                day: 27,
-            }),
-            time: Some(Time {
-                hour: 7,
-                minute: 32,
-                second: 0,
-                nanosecond: 0,
-            }),
-            offset: Some(Offset::Z),
-        }
-        .to_string(),
-    ),
-    ("FIELD", "another string".to_string()),
-    ("ONE_BILLION", (1000000000_f64).to_string()),
+("DATETIME", Datetime { date: Some(Date { year: 1979, month: 5, day: 27 } ), time: Some(Time { hour: 7, minute: 32, second: 0, nanosecond: 0 } ), offset: Some(Offset::Z) }.to_string()),
+("FIELD", "another string".to_string()),
+("ONE_BILLION", (1000000000_f64).to_string()),
 ]);
+}
+
 ```
 
-This might be useful when iterating over unknown key-value pairs during runtime. You do lose type information, though.
+</details>
 
+---
 ### Template, debug, deploy
-`toml_const` generates 3 toml files into your root project directory.
+
+`toml_const` generates 3 toml files into your root project directory (located in `.config/` by default).
 
 The contents from `*.template.toml` is used as a base, matching keys from
 `*.debug.toml` **or** `*.deploy.toml` will override the template values.
+New keys defined in `debug` or `deploy` will be added as well.
 
 Setting the top-level key `use=true` will cause `toml_const`
 to generate code from that particular config file.
 
-| debug use | deploy use | file(s) used |
-| --- | --- | --- |
-| `false` | `false` | template: compilation warning |
-| `false` | `true` | template + deploy |
-| `true` | `false` | template + debug |
-| `true` | `true` | template + deploy |
-
+| debug use | deploy use | file(s) used                  |
+| --------- | ---------- | ----------------------------- |
+| `false`   | `false`    | template: compilation warning |
+| `false`   | `true`     | template + deploy             |
+| `true`    | `false`    | template + debug              |
+| `true`    | `true`     | template + deploy             |

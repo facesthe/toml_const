@@ -19,27 +19,30 @@ use std::{
 
 use toml::Value;
 
+/// CLI arguments
 #[derive(Clone, Debug, Parser)]
 pub struct CliArgs {
     #[clap(subcommand)]
     pub command: MainSubCommands,
 }
 
+/// Subcommands for the CLI
 #[derive(Clone, Debug, Parser)]
 pub enum MainSubCommands {
     /// Initialize a new project with boilerplate
     Init(Init),
 }
 
+/// init subcommand
 #[derive(Clone, Debug, Parser)]
 pub struct Init {
     /// Path to Cargo.toml.
     #[clap(value_parser)]
     pub manifest_path: String,
 
-    /// Package name override. Uses the manifest package name by default.
+    /// Set the name prefix for toml files. Uses the manifest package name by default.
     #[clap(short, long)]
-    pub package_name: Option<String>,
+    pub with_name: Option<String>,
 
     /// Configuration dir for toml files, relative to the root cargo manifest.
     ///
@@ -100,7 +103,7 @@ pub fn run() -> ExitCode {
     };
 
     // override the package name if it is passed
-    if let Some(name_override) = args.package_name {
+    if let Some(name_override) = args.with_name {
         package_name = name_override.clone();
     }
 

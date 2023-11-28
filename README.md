@@ -4,7 +4,7 @@ TOML compile-time constants
 
 ## Getting started
 
-Install the CLI. This generates some boilerplate files and code:
+[Install the CLI](https://crates.io/crates/toml_const_cli). This generates some boilerplate files and code:
 ```sh
 cargo install toml_const_cli
 
@@ -40,7 +40,6 @@ fn main() {
     // ... rest of your build script
 }
 ```
-
 
 `generated.rs` can now be included into your code:
 

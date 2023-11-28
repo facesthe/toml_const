@@ -212,4 +212,3 @@ fn table_to_flat_hashmap(table: &toml::Table, prefix: Option<&str>) -> HashMap<S
 
     map
 }
-

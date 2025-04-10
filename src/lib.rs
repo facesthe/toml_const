@@ -1,46 +1,50 @@
-//!
-//!
 #![doc = include_str!("../README.md")]
 
 mod codegen;
 pub mod consts;
 mod generator;
 
+use std::ops::Deref;
+
 pub use generator::run;
 
-pub use macros::*;
 // re-exports
+pub use macros::*;
 pub use toml::value::{Date, Datetime, Offset, Time};
 
+use crate as toml_const;
+macros::toml_const_ws!(pub TOML_CONST_EXAMPLE_WS: "./example.toml");
+
 /// Const array
-pub struct Array<T: 'static>(&'static [T]);
+#[derive(Clone, Copy, Debug)]
+pub struct Array<T: 'static>(pub &'static [T]);
 
 /// An empty value. Empty toml arrays contain this type.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Empty;
+
+impl<T: 'static + Copy> Deref for crate::Array<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate as toml_const;
 
-    macros::test!("./lib.rs");
-
-    macros::toml_const! {pub TOML_CONST_ITEM: "./example.toml" }
-    // const X: usize = TOML_CONST_ITEM.DATABASE.CREDENTIALS.ODT2;
-    // macros::toml_const!("./Cargo.toml");
+    // example.toml must parse completely
+    macros::toml_const! {pub TOML_CONST_EXAMPLE: "./example.toml"}
+    const _: TomlConstExample = TOML_CONST_EXAMPLE;
 
     #[test]
-    fn test_print_time_secs() {
-        println!("unix time secs: {}", TIME);
-        let x = Array::<usize>(&[1]);
+    fn test_asd() {
+        println!("{:?}", TOML_CONST_EXAMPLE);
+        println!(
+            "size of TOML_CONST_EXAMPLE: {}",
+            std::mem::size_of::<TomlConstExample>()
+        );
     }
-
-    macro_rules! asd {
-        ($some_id: ident) => {
-            const $some_id: usize = 0;
-        };
-    }
-
-    asd!(ASD);
 }

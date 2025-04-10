@@ -48,6 +48,9 @@ price = 299.99
 name = "John Doe"
 dob = 1990-01-01T00:00:00Z
 
+# identically named tables must not conflict - they are defined in separate modules
+credentials = { username = "john's username", password = "john's password" }
+
 # Nested Table
 [database]
 server = "192.168.1.1"
@@ -65,7 +68,7 @@ point = { x = 1, y = 2 }
 # everything below contains examples from the toml specification
 
 # keys that start with a number are underscored
-# "127.0.0.1" = "value"
+"127.0.0.1" = "value"
 "character encoding" = "value"
 "ʎǝʞ" = "value"
 'key2' = "value"
@@ -89,6 +92,7 @@ ld1 = 1979-05-27
 lt1 = 07:32:00
 lt2 = 00:32:00.999999
 
+# array elements must all be of the same type
 [[fruits]]
 name = "apple"
 

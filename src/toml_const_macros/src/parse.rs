@@ -1,37 +1,28 @@
 //! Custom input syntax for proc-macro inputs
 
 use std::fs;
-use std::thread::LocalKey;
-use std::{clone, path::PathBuf};
+use std::path::PathBuf;
 
-use proc_macro as pm;
 use proc_macro2 as pm2;
 use proc_macro2::{Delimiter, Group};
 use quote::{ToTokens, TokenStreamExt, quote};
 use syn::Ident;
-use syn::{LitStr, Macro, braced, parse::Parse, punctuated::Punctuated};
-
-use crate::merge_tables;
+use syn::{LitStr, braced, parse::Parse, punctuated::Punctuated};
 
 /// Input to `toml_const` macro
 ///
 /// ```ignore
 /// // Point to a single file
-/// static _ = pub_macro! { pub TOML_CONST_STATIC: "some_file.toml"}
+/// toml_const!(pub TOML_CONST_STATIC: "some_file.toml");
 ///
 /// // point to multiple files
 /// // these files are checked in sequence for "use = true", and the first matching
-/// // file is merged with the template file
-/// static _ = pub_macro! {
+/// // file is merged with the template file. If there are none, only the template file is used.
+/// toml_const! {
 ///     pub TOML_CONST_STATIC: "some_template.toml" {
 ///         "some_substituion_1.toml";
 ///         "some_substituion_2.toml";
 ///     }
-/// }
-///
-/// // pub_macro expands to this
-/// static _ = inner_macro! {
-///
 /// }
 /// ```
 #[derive(Clone)]
@@ -102,14 +93,14 @@ impl ToTokens for MacroInput {
         quote! {:}.to_tokens(tokens);
         self.path.to_tokens(tokens);
 
-        let substitutions = match &self.sub_paths {
+        match &self.sub_paths {
             Some(sub) => {
                 let subs = sub.iter().collect::<Punctuated<_, syn::Token![;]>>();
 
                 tokens.append(Group::new(Delimiter::Brace, subs.to_token_stream()));
             }
             None => (),
-        };
+        }
     }
 }
 
@@ -191,11 +182,9 @@ impl MacroInput {
                         true => {
                             let (_, use_val) =
                                 sub_toml.get_key_value("use").expect("already checked");
-                            if let toml::Value::Boolean(b) = use_val {
-                                if *b {
-                                    res_sub = Some(sub_toml);
-                                    break;
-                                }
+                            if let toml::Value::Boolean(true) = use_val {
+                                res_sub = Some(sub_toml);
+                                break;
                             }
                         }
                         false => (),
@@ -214,6 +203,29 @@ impl MacroInput {
 
         Ok(merged)
     }
+}
+
+/// Merge a toml template with a changes table. Changes will set/overwrite values in the template.
+fn merge_tables(template: &toml::Table, changes: &toml::Table) -> toml::Table {
+    let mut merged_table = template.clone();
+
+    for (key, value) in changes.iter() {
+        if let Some(existing_value) = merged_table.get_mut(key) {
+            if let Some(existing_table) = existing_value.as_table_mut() {
+                if let Some(changes_table) = value.as_table() {
+                    // Recursively merge the tables
+                    let merged_subtable = merge_tables(existing_table, changes_table);
+                    *existing_value = toml::Value::Table(merged_subtable);
+                    continue;
+                }
+            }
+        }
+
+        // Update the value directly if it doesn't exist in the template or cannot be merged
+        merged_table.insert(key.clone(), value.clone());
+    }
+
+    merged_table
 }
 
 fn pathbuf_to_str(input: &PathBuf) -> &str {
@@ -245,10 +257,4 @@ fn read_litstr_to_toml(litstr: &LitStr) -> Result<toml::Table, pm2::TokenStream>
 }
 
 #[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_asd() {
-        println!("hello world");
-    }
-}
+mod tests {}

@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
+#![no_std]
 
-use std::ops::Deref;
+use core::ops::Deref;
 
 // re-exports
 pub use macros::*;
@@ -35,13 +36,4 @@ mod tests {
         }
     }
     macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml"}
-
-    #[test]
-    fn test_asd() {
-        println!("{:?}", TOML_CONST_EXAMPLE);
-        println!(
-            "size of TOML_CONST_EXAMPLE: {}",
-            std::mem::size_of::<TomlConstExample>()
-        );
-    }
 }

@@ -1,12 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-mod codegen;
-pub mod consts;
-mod generator;
-
 use std::ops::Deref;
-
-pub use generator::run;
 
 // re-exports
 pub use macros::*;
@@ -33,7 +27,13 @@ mod tests {
     use crate as toml_const;
 
     // example.toml must parse completely
-    macros::toml_const! {pub TOML_CONST_EXAMPLE: "./example.toml"}
+    macros::toml_const! {
+        pub TOML_CONST_EXAMPLE: "./example.toml"
+        CARGO_TOML: "Cargo.toml" {
+            "src/toml_const_macros/Cargo.toml";
+            "non_existent.toml";
+        }
+    }
     macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml"}
 
     #[test]

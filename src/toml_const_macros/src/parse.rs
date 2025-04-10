@@ -9,6 +9,9 @@ use quote::{ToTokens, TokenStreamExt, quote};
 use syn::Ident;
 use syn::{LitStr, braced, parse::Parse, punctuated::Punctuated};
 
+#[derive(Clone)]
+pub struct MultipleMacroInput(pub Vec<MacroInput>);
+
 /// Input to `toml_const` macro
 ///
 /// ```ignore
@@ -38,6 +41,18 @@ pub struct MacroInput {
 
     /// Any optional paths to substitute over the first path
     pub sub_paths: Option<Vec<LitStr>>,
+}
+
+impl Parse for MultipleMacroInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut macro_inputs = Vec::new();
+        while !input.is_empty() {
+            let macro_input: MacroInput = input.parse()?;
+            macro_inputs.push(macro_input);
+        }
+
+        Ok(Self(macro_inputs))
+    }
 }
 
 impl Parse for MacroInput {
@@ -120,10 +135,26 @@ impl MacroInput {
                 let additions = sp.iter().map(|sub_path| {
                     let mut abs_sub_path = base_path.clone();
                     abs_sub_path.push(PathBuf::from(sub_path.value()));
-                    let sub_path = pathbuf_to_str(&abs_sub_path);
 
-                    quote! {
-                        const _: &'static str = include_str!(#sub_path);
+                    match abs_sub_path.exists() {
+                        true => match abs_sub_path.is_file() {
+                            true => {
+                                let sub_path = pathbuf_to_str(&abs_sub_path);
+
+                                quote! {
+                                    const _: &'static str = include_str!(#sub_path);
+                                }
+                            }
+                            false => {
+                                return syn::Error::new(
+                                    sub_path.span(),
+                                    format!("path {} is not a file", abs_sub_path.display()),
+                                )
+                                .to_compile_error()
+                                .to_token_stream();
+                            }
+                        },
+                        false => quote! {},
                     }
                 });
 
@@ -169,7 +200,13 @@ impl MacroInput {
 
     /// With the the data in `self`, read in the template file and apply any substitutions
     pub fn generate_toml_table(&self) -> Result<toml::Table, pm2::TokenStream> {
-        let template_toml = read_litstr_to_toml(&self.path)?;
+        let template_toml = read_litstr_to_toml(&self.path)?.ok_or(
+            syn::Error::new(
+                self.path.span(),
+                format!("unable to read template file: {}", self.path.value()),
+            )
+            .to_compile_error(),
+        )?;
 
         let substitute_file = match &self.sub_paths {
             Some(paths) => {
@@ -177,6 +214,11 @@ impl MacroInput {
 
                 for sub_lit in paths.iter() {
                     let sub_toml = read_litstr_to_toml(sub_lit)?;
+                    let sub_toml = match sub_toml {
+                        Some(st) => st,
+                        None => continue,
+                    };
+
                     // check if use is set to true
                     match sub_toml.contains_key("use") {
                         true => {
@@ -233,8 +275,14 @@ fn pathbuf_to_str(input: &PathBuf) -> &str {
 }
 
 /// Read in a litstr path to a toml file, return an error tokenstream if it fails.
-fn read_litstr_to_toml(litstr: &LitStr) -> Result<toml::Table, pm2::TokenStream> {
+fn read_litstr_to_toml(litstr: &LitStr) -> Result<Option<toml::Table>, pm2::TokenStream> {
     let path = PathBuf::from(litstr.value());
+
+    // we allow paths that do not resolve to a file
+    if !path.exists() {
+        return Ok(None);
+    }
+
     let file = match fs::read_to_string(path) {
         Ok(tf) => tf,
         Err(e) => {
@@ -253,7 +301,7 @@ fn read_litstr_to_toml(litstr: &LitStr) -> Result<toml::Table, pm2::TokenStream>
         }
     };
 
-    Ok(template_toml)
+    Ok(Some(template_toml))
 }
 
 #[cfg(test)]

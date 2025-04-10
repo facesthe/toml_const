@@ -7,7 +7,7 @@ title = "TOML Example"
 age = 25
 
 # Float
-pi = 3.14159
+pi = 3.1
 
 # Boolean
 is_active = true

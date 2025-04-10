@@ -12,9 +12,6 @@ pub use generator::run;
 pub use macros::*;
 pub use toml::value::{Date, Datetime, Offset, Time};
 
-use crate as toml_const;
-macros::toml_const_ws!(pub TOML_CONST_EXAMPLE_WS: "./example.toml");
-
 /// Const array
 #[derive(Clone, Copy, Debug)]
 pub struct Array<T: 'static>(pub &'static [T]);
@@ -37,7 +34,7 @@ mod tests {
 
     // example.toml must parse completely
     macros::toml_const! {pub TOML_CONST_EXAMPLE: "./example.toml"}
-    const _: TomlConstExample = TOML_CONST_EXAMPLE;
+    macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml"}
 
     #[test]
     fn test_asd() {

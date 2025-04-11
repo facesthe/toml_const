@@ -1,13 +1,13 @@
 //! Custom input syntax for proc-macro inputs
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use proc_macro2 as pm2;
 use proc_macro2::{Delimiter, Group};
-use quote::{ToTokens, TokenStreamExt, quote};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::Ident;
-use syn::{LitStr, braced, parse::Parse, punctuated::Punctuated};
+use syn::{braced, parse::Parse, punctuated::Punctuated, LitStr};
 
 #[derive(Clone)]
 pub struct MultipleMacroInput(pub Vec<MacroInput>);
@@ -32,6 +32,9 @@ pub struct MultipleMacroInput(pub Vec<MacroInput>);
 pub struct MacroInput {
     /// Whether the static variable is public
     pub is_pub: bool,
+
+    /// `false` if static, `true` if const
+    pub static_const: bool,
 
     /// Static item identifier
     pub item_ident: Ident,
@@ -68,6 +71,23 @@ impl Parse for MacroInput {
             }
         };
 
+        let static_const = {
+            let lookahead = input.lookahead1();
+
+            if lookahead.peek(syn::Token![static]) {
+                let _: syn::Token![static] = input.parse()?;
+                true
+            } else if lookahead.peek(syn::Token![const]) {
+                let _: syn::Token![const] = input.parse()?;
+                false
+            } else {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "expected `static` or `const`",
+                ));
+            }
+        };
+
         let item_ident: syn::Ident = input.parse()?;
         let _: syn::Token![:] = input.parse()?;
 
@@ -91,6 +111,7 @@ impl Parse for MacroInput {
 
         Ok(Self {
             is_pub,
+            static_const,
             item_ident,
             path: template,
             sub_paths,
@@ -102,6 +123,11 @@ impl ToTokens for MacroInput {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         if self.is_pub {
             quote! {pub}.to_tokens(tokens);
+        }
+
+        match self.static_const {
+            true => quote! {static}.to_tokens(tokens),
+            false => quote! {const}.to_tokens(tokens),
         }
 
         self.item_ident.to_tokens(tokens);
@@ -120,8 +146,8 @@ impl MacroInput {
     /// Return one or more const definitions to an underscore expression (`_`).\
     ///
     /// These are calls to [include_str!] containing absolute paths.
-    pub fn to_const_defs(&self, base_path: &PathBuf) -> pm2::TokenStream {
-        let mut template_path = base_path.clone();
+    pub fn to_const_defs(&self, base_path: &Path) -> pm2::TokenStream {
+        let mut template_path = base_path.to_path_buf();
         template_path.push(PathBuf::from(&self.path.value()));
         let template_path = pathbuf_to_str(&template_path);
 
@@ -129,7 +155,7 @@ impl MacroInput {
 
         if let Some(sp) = &self.sub_paths {
             let additions = sp.iter().map(|sub_path| {
-                let mut abs_sub_path = base_path.clone();
+                let mut abs_sub_path = base_path.to_path_buf();
                 abs_sub_path.push(PathBuf::from(sub_path.value()));
 
                 match abs_sub_path.exists() {
@@ -161,8 +187,8 @@ impl MacroInput {
     /// Create a clone of `self` with all inner paths turned to absolute paths.
     ///
     /// The input base path must be absolute.
-    pub fn to_abs_path(&self, base_path: &PathBuf) -> Self {
-        let mut abs_base_path = base_path.clone();
+    pub fn to_abs_path(&self, base_path: &Path) -> Self {
+        let mut abs_base_path = base_path.to_path_buf();
 
         abs_base_path.push(PathBuf::from(self.path.value()));
         let abs_base_path = LitStr::new(pathbuf_to_str(&abs_base_path), self.path.span());
@@ -171,7 +197,7 @@ impl MacroInput {
         let sub_paths = sub_paths.map(|sp| {
             sp.into_iter()
                 .map(|p| {
-                    let mut abs_sub_path = base_path.clone();
+                    let mut abs_sub_path = base_path.to_path_buf();
                     abs_sub_path.push(PathBuf::from(p.value()));
                     LitStr::new(pathbuf_to_str(&abs_sub_path), p.span())
                 })
@@ -253,7 +279,7 @@ fn merge_tables(template: &toml::Table, changes: &toml::Table) -> toml::Table {
     merged_table
 }
 
-fn pathbuf_to_str(input: &PathBuf) -> &str {
+fn pathbuf_to_str(input: &Path) -> &str {
     input.to_str().expect("failed to convert path to str")
 }
 

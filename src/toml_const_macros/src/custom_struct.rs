@@ -7,7 +7,7 @@ use std::borrow::Cow;
 
 use proc_macro2::{self as pm2, Span};
 use quote::quote;
-use syn::{Ident, punctuated::Punctuated};
+use syn::{punctuated::Punctuated, Ident};
 
 /// Chars to replace when converting to an identifier.
 const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
@@ -50,7 +50,7 @@ pub trait ConstIdentDef {
     /// Create a valid type identifier, formatted as PascalCase.
     fn to_type_ident(&self) -> String;
 
-    /// Create an array type identifier formattedas PascalCase.
+    /// Create an array type identifier formatted as PascalCase.
     fn to_array_type_ident(&self) -> String {
         format!("{}Item", self.to_type_ident())
     }

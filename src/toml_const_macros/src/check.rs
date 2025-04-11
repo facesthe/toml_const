@@ -5,16 +5,18 @@ use std::collections::HashSet;
 // use proc_macro::Span;
 use proc_macro2::{self as pm2, Span};
 
-/// Various ways tables can be mismatched
+/// Various ways checks can be mismatched
 #[derive(Clone, Debug)]
 pub enum CheckError {
     /// Key that is in one table but not the other.
     KeyMismatch {
         /// Sequence of keys in reverse order that leads to this mismatch.
-        table_path: Vec<String>,
+        path: Vec<String>,
         a_diff: Option<String>,
         b_diff: Option<String>,
     },
+    /// A mismatch in value types.
+    ///
     /// Sequence of keys in reverse order that leads to this mismatch.
     ValueMismatch(Vec<String>),
 }
@@ -23,7 +25,7 @@ impl std::fmt::Display for CheckError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CheckError::KeyMismatch {
-                table_path,
+                path: table_path,
                 a_diff,
                 b_diff,
             } => {
@@ -97,14 +99,14 @@ pub fn check(table: &toml::Table) -> Result<(), CheckError> {
 fn propagate_check_error(key: &str, err: CheckError) -> CheckError {
     match err {
         CheckError::KeyMismatch {
-            table_path: mut tp,
+            path: mut tp,
             a_diff,
             b_diff,
         } => {
             tp.push(key.to_string());
 
             CheckError::KeyMismatch {
-                table_path: tp,
+                path: tp,
                 a_diff,
                 b_diff,
             }
@@ -222,21 +224,21 @@ pub fn compare_table_schema(
         (None, None) => (),
         (None, Some(b)) => {
             return Err(CheckError::KeyMismatch {
-                table_path: vec![],
+                path: vec![],
                 a_diff: None,
                 b_diff: Some(b.to_string()),
             });
         }
         (Some(a), None) => {
             return Err(CheckError::KeyMismatch {
-                table_path: vec![],
+                path: vec![],
                 a_diff: Some(a.to_string()),
                 b_diff: None,
             });
         }
         (Some(a), Some(b)) => {
             return Err(CheckError::KeyMismatch {
-                table_path: vec![],
+                path: vec![],
                 a_diff: Some(a.to_string()),
                 b_diff: Some(b.to_string()),
             });

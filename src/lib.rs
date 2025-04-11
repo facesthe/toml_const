@@ -29,12 +29,12 @@ mod tests {
 
     // example.toml must parse completely
     macros::toml_const! {
-        pub TOML_CONST_EXAMPLE: "./example.toml"
-        CARGO_TOML: "Cargo.toml" {
+        pub static TOML_CONST_EXAMPLE: "./example.toml"
+        static CARGO_TOML: "Cargo.toml" {
             "src/toml_const_macros/Cargo.toml";
             "non_existent.toml";
         }
     }
 
-    macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml" }
+    macros::toml_const_ws! {pub static TOML_CONST_EXAMPLE_WS: "./example.toml" }
 }

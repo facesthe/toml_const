@@ -4,7 +4,7 @@ mod parse;
 
 use std::path::PathBuf;
 
-use custom_struct::{Instantiate, Key, def_inner_tables};
+use custom_struct::{def_inner_tables, Instantiate, Key};
 use proc_macro as pm;
 use proc_macro2::{self as pm2, Span};
 
@@ -134,10 +134,15 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         quote! {}
     };
 
+    let static_const_token = match input.static_const {
+        true => quote! {const},
+        false => quote! {static},
+    };
+
     quote! {
         #table_definitions
 
-        #pub_token static #instantiation
+        #pub_token #static_const_token #instantiation
     }
     .into()
 }

@@ -141,14 +141,12 @@ impl MacroInput {
                                 const _: &'static str = include_str!(#sub_path);
                             }
                         }
-                        false => {
-                            syn::Error::new(
-                                sub_path.span(),
-                                format!("path {} is not a file", abs_sub_path.display()),
-                            )
-                            .to_compile_error()
-                            .to_token_stream()
-                        }
+                        false => syn::Error::new(
+                            sub_path.span(),
+                            format!("path {} is not a file", abs_sub_path.display()),
+                        )
+                        .to_compile_error()
+                        .to_token_stream(),
                     },
                     false => quote! {},
                 }
@@ -157,11 +155,7 @@ impl MacroInput {
             const_defs.extend(additions);
         }
 
-        
-
-        const_defs
-            .into_iter()
-            .collect::<pm2::TokenStream>()
+        const_defs.into_iter().collect::<pm2::TokenStream>()
     }
 
     /// Create a clone of `self` with all inner paths turned to absolute paths.
@@ -214,8 +208,7 @@ impl MacroInput {
 
                     // check if use is set to true
                     if sub_toml.contains_key("use") {
-                        let (_, use_val) =
-                            sub_toml.get_key_value("use").expect("already checked");
+                        let (_, use_val) = sub_toml.get_key_value("use").expect("already checked");
                         if let toml::Value::Boolean(true) = use_val {
                             res_sub = Some(sub_toml);
                             break;

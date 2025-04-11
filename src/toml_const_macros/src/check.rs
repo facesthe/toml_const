@@ -130,7 +130,9 @@ pub fn check_unauthorized_keys(input: &toml::Table) -> Result<(), pm2::TokenStre
             toml::Value::Table(sub_table) => check_unauthorized_keys(sub_table)?,
             toml::Value::Array(arr) => {
                 for item in arr.iter() {
-                    if let toml::Value::Table(sub_table) = item { check_unauthorized_keys(sub_table)? }
+                    if let toml::Value::Table(sub_table) = item {
+                        check_unauthorized_keys(sub_table)?
+                    }
                 }
             }
             _ => (),

@@ -461,14 +461,14 @@ pub fn def_inner_tables(table: &toml::Table, key: &Key<'_>) -> pm2::TokenStream 
                     let first = &arr[0];
 
                     if let toml::Value::Table(t) = first {
-                        Some(def_inner_tables(t, &Key::Element(&key)))
+                        Some(def_inner_tables(t, &Key::Element(key)))
                     } else {
                         None
                     }
                 }
             },
             toml::Value::Table(tab) => {
-                let inner = def_inner_tables(tab, &Key::Field(&key));
+                let inner = def_inner_tables(tab, &Key::Field(key));
 
                 Some(inner)
             }
@@ -525,7 +525,7 @@ mod tests {
             &Key::Var(&Ident::new("ROOT_TABLE", Span::call_site())),
         );
 
-        println!("Table definitions: {}", table_defs.to_string());
+        println!("Table definitions: {}", table_defs);
 
         // let tables = find_all_inner_tables(toml.clone());
 

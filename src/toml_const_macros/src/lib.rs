@@ -1,3 +1,4 @@
+mod check;
 mod custom_struct;
 mod parse;
 
@@ -5,7 +6,7 @@ use std::path::PathBuf;
 
 use custom_struct::{Instantiate, Key, def_inner_tables};
 use proc_macro as pm;
-use proc_macro2 as pm2;
+use proc_macro2::{self as pm2, Span};
 
 use parse::{MacroInput, MultipleMacroInput};
 use quote::quote;
@@ -109,6 +110,20 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         Ok(tt) => tt,
         Err(e) => return e.into(),
     };
+
+    match check::check_unauthorized_keys(&toml_table) {
+        Ok(_) => (),
+        Err(e) => return e.into(),
+    }
+
+    match check::check(&toml_table) {
+        Ok(_) => (),
+        Err(e) => {
+            return syn::Error::new(Span::call_site(), e.to_string())
+                .to_compile_error()
+                .into();
+        }
+    }
 
     let table_definitions = def_inner_tables(&toml_table, &Key::Var(&input.item_ident));
     let instantiation = toml_table.instantiate(Key::Var(&input.item_ident), vec![]);

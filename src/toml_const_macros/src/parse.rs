@@ -83,7 +83,7 @@ impl Parse for MacroInput {
                 let lit_str_vec =
                     Punctuated::<LitStr, syn::token::Semi>::parse_terminated(&content)?;
 
-                let res = lit_str_vec.into_iter().map(|sp| sp).collect::<Vec<_>>();
+                let res = lit_str_vec.into_iter().collect::<Vec<_>>();
                 Some(res)
             }
             false => None,
@@ -108,13 +108,10 @@ impl ToTokens for MacroInput {
         quote! {:}.to_tokens(tokens);
         self.path.to_tokens(tokens);
 
-        match &self.sub_paths {
-            Some(sub) => {
-                let subs = sub.iter().collect::<Punctuated<_, syn::Token![;]>>();
+        if let Some(sub) = &self.sub_paths {
+            let subs = sub.iter().collect::<Punctuated<_, syn::Token![;]>>();
 
-                tokens.append(Group::new(Delimiter::Brace, subs.to_token_stream()));
-            }
-            None => (),
+            tokens.append(Group::new(Delimiter::Brace, subs.to_token_stream()));
         }
     }
 }
@@ -130,45 +127,41 @@ impl MacroInput {
 
         let mut const_defs = vec![quote! {const _: &'static str = include_str!(#template_path);}];
 
-        match &self.sub_paths {
-            Some(sp) => {
-                let additions = sp.iter().map(|sub_path| {
-                    let mut abs_sub_path = base_path.clone();
-                    abs_sub_path.push(PathBuf::from(sub_path.value()));
+        if let Some(sp) = &self.sub_paths {
+            let additions = sp.iter().map(|sub_path| {
+                let mut abs_sub_path = base_path.clone();
+                abs_sub_path.push(PathBuf::from(sub_path.value()));
 
-                    match abs_sub_path.exists() {
-                        true => match abs_sub_path.is_file() {
-                            true => {
-                                let sub_path = pathbuf_to_str(&abs_sub_path);
+                match abs_sub_path.exists() {
+                    true => match abs_sub_path.is_file() {
+                        true => {
+                            let sub_path = pathbuf_to_str(&abs_sub_path);
 
-                                quote! {
-                                    const _: &'static str = include_str!(#sub_path);
-                                }
+                            quote! {
+                                const _: &'static str = include_str!(#sub_path);
                             }
-                            false => {
-                                return syn::Error::new(
-                                    sub_path.span(),
-                                    format!("path {} is not a file", abs_sub_path.display()),
-                                )
-                                .to_compile_error()
-                                .to_token_stream();
-                            }
-                        },
-                        false => quote! {},
-                    }
-                });
+                        }
+                        false => {
+                            syn::Error::new(
+                                sub_path.span(),
+                                format!("path {} is not a file", abs_sub_path.display()),
+                            )
+                            .to_compile_error()
+                            .to_token_stream()
+                        }
+                    },
+                    false => quote! {},
+                }
+            });
 
-                const_defs.extend(additions);
-            }
-            None => (),
+            const_defs.extend(additions);
         }
 
-        let collected = const_defs
-            .into_iter()
-            .map(|cd| cd)
-            .collect::<pm2::TokenStream>();
+        
 
-        collected
+        const_defs
+            .into_iter()
+            .collect::<pm2::TokenStream>()
     }
 
     /// Create a clone of `self` with all inner paths turned to absolute paths.
@@ -220,16 +213,13 @@ impl MacroInput {
                     };
 
                     // check if use is set to true
-                    match sub_toml.contains_key("use") {
-                        true => {
-                            let (_, use_val) =
-                                sub_toml.get_key_value("use").expect("already checked");
-                            if let toml::Value::Boolean(true) = use_val {
-                                res_sub = Some(sub_toml);
-                                break;
-                            }
+                    if sub_toml.contains_key("use") {
+                        let (_, use_val) =
+                            sub_toml.get_key_value("use").expect("already checked");
+                        if let toml::Value::Boolean(true) = use_val {
+                            res_sub = Some(sub_toml);
+                            break;
                         }
-                        false => (),
                     }
                 }
 

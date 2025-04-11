@@ -113,3 +113,21 @@ name = "banana"
 
 [[fruits.varieties]]
 name = "plantain"
+
+[win]
+someofthis = false
+
+[[win.an_array]]
+value = 10
+something = { this = "false", that = true }
+# this_value = 100
+
+[[win.an_array]]
+value = 0
+something = { this = "false", that = false }
+
+[[win.an_array]]
+value = 0
+something = { this = "false", that = false }
+# some = false
+# other_value = 100

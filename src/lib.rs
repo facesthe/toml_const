@@ -35,5 +35,6 @@ mod tests {
             "non_existent.toml";
         }
     }
-    macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml"}
+
+    macros::toml_const_ws! {pub TOML_CONST_EXAMPLE_WS: "./example.toml" }
 }

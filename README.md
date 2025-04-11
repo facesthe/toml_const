@@ -20,14 +20,14 @@ use toml_const::{toml_const, toml_const_ws};
 // public struct
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
-    pub EXAMPLE_TOML: "example.toml"
+    pub const EXAMPLE_TOML: "example.toml"
     // multiple definitions are supported
-    CARGO_TOML: "Cargo.toml"
+    static CARGO_TOML: "Cargo.toml"
 }
 
 // private struct
 // include a file relative to your workspace root
-toml_const_ws! {EXAMPLE_TOML_WS: "example.toml"}
+toml_const_ws! {static EXAMPLE_TOML_WS: "example.toml"}
 
 // table keys are capitalized struct fields
 const TITLE: &str = EXAMPLE_TOML.TITLE;
@@ -46,7 +46,7 @@ use toml_const::toml_const;
 
 toml_const! {
     // example.toml is the template/parent file (must exist)
-    pub EXAMPLE_TOML: "example.toml" {
+    pub static EXAMPLE_TOML: "example.toml" {
         // the first file with use = true will be merged into the parent file
         //
         // as none of the files have use = true,

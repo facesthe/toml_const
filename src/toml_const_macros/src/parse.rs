@@ -74,11 +74,11 @@ impl Parse for MacroInput {
         let static_const = {
             let lookahead = input.lookahead1();
 
-            if lookahead.peek(syn::Token![static]) {
-                let _: syn::Token![static] = input.parse()?;
-                true
-            } else if lookahead.peek(syn::Token![const]) {
+            if lookahead.peek(syn::Token![const]) {
                 let _: syn::Token![const] = input.parse()?;
+                true
+            } else if lookahead.peek(syn::Token![static]) {
+                let _: syn::Token![static] = input.parse()?;
                 false
             } else {
                 return Err(syn::Error::new(
@@ -126,8 +126,8 @@ impl ToTokens for MacroInput {
         }
 
         match self.static_const {
-            true => quote! {static}.to_tokens(tokens),
-            false => quote! {const}.to_tokens(tokens),
+            true => quote! {const}.to_tokens(tokens),
+            false => quote! {static}.to_tokens(tokens),
         }
 
         self.item_ident.to_tokens(tokens);

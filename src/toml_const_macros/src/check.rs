@@ -75,6 +75,32 @@ impl std::error::Error for CheckError {
     }
 }
 
+/// Check that this table and all child items do not contain prohibited keys.
+pub fn check_unauthorized_keys(input: &toml::Table) -> Result<(), pm2::TokenStream> {
+    for (key, value) in input.iter() {
+        if key.is_empty() {
+            return Err(
+                syn::Error::new(Span::call_site(), "empty quoted keys cannot be used")
+                    .to_compile_error(),
+            );
+        }
+
+        match value {
+            toml::Value::Table(sub_table) => check_unauthorized_keys(sub_table)?,
+            toml::Value::Array(arr) => {
+                for item in arr.iter() {
+                    if let toml::Value::Table(sub_table) = item {
+                        check_unauthorized_keys(sub_table)?
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+
+    Ok(())
+}
+
 /// Main check entry point
 pub fn check(table: &toml::Table) -> Result<(), CheckError> {
     // check that all arrays are consistent
@@ -116,32 +142,6 @@ fn propagate_check_error(key: &str, err: CheckError) -> CheckError {
             CheckError::ValueMismatch(items)
         }
     }
-}
-
-/// Check that this table and all child items do not contain prohibited keys.
-pub fn check_unauthorized_keys(input: &toml::Table) -> Result<(), pm2::TokenStream> {
-    for (key, value) in input.iter() {
-        if key.is_empty() {
-            return Err(
-                syn::Error::new(Span::call_site(), "empty quoted keys cannot be used")
-                    .to_compile_error(),
-            );
-        }
-
-        match value {
-            toml::Value::Table(sub_table) => check_unauthorized_keys(sub_table)?,
-            toml::Value::Array(arr) => {
-                for item in arr.iter() {
-                    if let toml::Value::Table(sub_table) = item {
-                        check_unauthorized_keys(sub_table)?
-                    }
-                }
-            }
-            _ => (),
-        }
-    }
-
-    Ok(())
 }
 
 fn compare_value(

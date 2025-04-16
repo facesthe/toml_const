@@ -7,7 +7,7 @@ use core::ops::Deref;
 pub use macros::*;
 pub use toml::value::{Date, Datetime, Offset, Time};
 
-/// Const array
+/// An array referencing a `'static` slice of type `T`.
 #[derive(Clone, Copy, Debug)]
 pub struct Array<T: 'static>(pub &'static [T]);
 
@@ -29,12 +29,13 @@ mod tests {
 
     // example.toml must parse completely
     macros::toml_const! {
-        pub static TOML_CONST_EXAMPLE: "./example.toml"
+        pub const TOML_CONST_EXAMPLE: "./example.toml";
+
         static CARGO_TOML: "Cargo.toml" {
             "src/toml_const_macros/Cargo.toml";
             "non_existent.toml";
         }
     }
 
-    macros::toml_const_ws! {pub static TOML_CONST_EXAMPLE_WS: "./example.toml" }
+    macros::toml_const_ws! {pub static TOML_CONST_EXAMPLE_WS: "./example.toml"; }
 }

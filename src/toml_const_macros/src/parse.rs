@@ -12,22 +12,7 @@ use syn::{braced, parse::Parse, punctuated::Punctuated, LitStr};
 #[derive(Clone)]
 pub struct MultipleMacroInput(pub Vec<MacroInput>);
 
-/// Input to `toml_const` macro
-///
-/// ```ignore
-/// // Point to a single file
-/// toml_const!(pub TOML_CONST_STATIC: "some_file.toml");
-///
-/// // point to multiple files
-/// // these files are checked in sequence for "use = true", and the first matching
-/// // file is merged with the template file. If there are none, only the template file is used.
-/// toml_const! {
-///     pub TOML_CONST_STATIC: "some_template.toml" {
-///         "some_substituion_1.toml";
-///         "some_substituion_2.toml";
-///     }
-/// }
-/// ```
+/// Input to [toml_const!](crate::toml_const)
 #[derive(Clone)]
 pub struct MacroInput {
     /// Whether the static variable is public
@@ -43,7 +28,15 @@ pub struct MacroInput {
     pub path: LitStr,
 
     /// Any optional paths to substitute over the first path
-    pub sub_paths: Option<Vec<LitStr>>,
+    pub sub_paths: Option<Vec<UsePath>>,
+}
+
+/// A litstring path, with an optional use override keyword
+#[derive(Clone)]
+pub struct UsePath {
+    pub path: LitStr,
+    /// Manual use override in macro input
+    pub is_used: bool,
 }
 
 impl Parse for MultipleMacroInput {
@@ -90,23 +83,27 @@ impl Parse for MacroInput {
 
         let item_ident: syn::Ident = input.parse()?;
         let _: syn::Token![:] = input.parse()?;
-
         let template: LitStr = input.parse()?;
-
         let lookahead = input.lookahead1();
 
-        let sub_paths = match lookahead.peek(syn::token::Brace) {
+        let sub_paths = match lookahead.peek(syn::Token![;]) {
             true => {
-                let content;
-                braced!(content in input);
-
-                let lit_str_vec =
-                    Punctuated::<LitStr, syn::token::Semi>::parse_terminated(&content)?;
-
-                let res = lit_str_vec.into_iter().collect::<Vec<_>>();
-                Some(res)
+                let _: syn::Token![;] = input.parse()?;
+                None
             }
-            false => None,
+            false => match lookahead.peek(syn::token::Brace) {
+                true => {
+                    let content;
+                    braced!(content in input);
+
+                    let lit_str_vec =
+                        Punctuated::<UsePath, syn::token::Semi>::parse_terminated(&content)?;
+
+                    let res = lit_str_vec.into_iter().collect::<Vec<_>>();
+                    Some(res)
+                }
+                false => return Err(syn::Error::new(input.span(), "expected {} or ;")),
+            },
         };
 
         Ok(Self {
@@ -134,16 +131,54 @@ impl ToTokens for MacroInput {
         quote! {:}.to_tokens(tokens);
         self.path.to_tokens(tokens);
 
-        if let Some(sub) = &self.sub_paths {
-            let subs = sub.iter().collect::<Punctuated<_, syn::Token![;]>>();
+        match &self.sub_paths {
+            Some(sub) => {
+                let subs = sub.iter().collect::<Punctuated<_, syn::Token![;]>>();
 
-            tokens.append(Group::new(Delimiter::Brace, subs.to_token_stream()));
+                let subs = match subs.len() {
+                    0 => quote! {#subs},
+                    _ => quote! {#subs;},
+                };
+
+                tokens.append(Group::new(Delimiter::Brace, subs.to_token_stream()));
+            }
+            None => quote! {;}.to_tokens(tokens),
         }
     }
 }
 
+impl Parse for UsePath {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let is_used = {
+            let lookahead = input.lookahead1();
+            match lookahead.peek(syn::Token![use]) {
+                true => {
+                    let _: syn::Token![use] = input.parse()?;
+                    true
+                }
+                false => false,
+            }
+        };
+
+        let path: LitStr = input.parse()?;
+
+        Ok(Self { path, is_used })
+    }
+}
+
+impl ToTokens for UsePath {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        if self.is_used {
+            quote! {use}.to_tokens(tokens);
+        }
+
+        self.path.to_tokens(tokens);
+    }
+}
+
 impl MacroInput {
-    /// Return one or more const definitions to an underscore expression (`_`).\
+    /// Return one or more const definitions to an underscore expression (`_`).
+    /// If the path does not point to a file, it will not be included.
     ///
     /// These are calls to [include_str!] containing absolute paths.
     pub fn to_const_defs(&self, base_path: &Path) -> pm2::TokenStream {
@@ -156,7 +191,7 @@ impl MacroInput {
         if let Some(sp) = &self.sub_paths {
             let additions = sp.iter().map(|sub_path| {
                 let mut abs_sub_path = base_path.to_path_buf();
-                abs_sub_path.push(PathBuf::from(sub_path.value()));
+                abs_sub_path.push(PathBuf::from(sub_path.path.value()));
 
                 match abs_sub_path.exists() {
                     true => match abs_sub_path.is_file() {
@@ -168,7 +203,7 @@ impl MacroInput {
                             }
                         }
                         false => syn::Error::new(
-                            sub_path.span(),
+                            sub_path.path.span(),
                             format!("path {} is not a file", abs_sub_path.display()),
                         )
                         .to_compile_error()
@@ -198,8 +233,13 @@ impl MacroInput {
             sp.into_iter()
                 .map(|p| {
                     let mut abs_sub_path = base_path.to_path_buf();
-                    abs_sub_path.push(PathBuf::from(p.value()));
-                    LitStr::new(pathbuf_to_str(&abs_sub_path), p.span())
+                    abs_sub_path.push(PathBuf::from(p.path.value()));
+                    let new_path = LitStr::new(pathbuf_to_str(&abs_sub_path), p.path.span());
+
+                    UsePath {
+                        path: new_path,
+                        ..p
+                    }
                 })
                 .collect::<Vec<_>>()
         });
@@ -225,20 +265,29 @@ impl MacroInput {
             Some(paths) => {
                 let mut res_sub = None;
 
-                for sub_lit in paths.iter() {
-                    let sub_toml = read_litstr_to_toml(sub_lit)?;
+                for sub_path in paths.iter() {
+                    let sub_toml = read_litstr_to_toml(&sub_path.path)?;
                     let sub_toml = match sub_toml {
                         Some(st) => st,
                         None => continue,
                     };
 
-                    // check if use is set to true
-                    if sub_toml.contains_key("use") {
-                        let (_, use_val) = sub_toml.get_key_value("use").expect("already checked");
-                        if let toml::Value::Boolean(true) = use_val {
+                    match (sub_path.is_used, sub_toml.contains_key("use")) {
+                        // macro-level override
+                        (true, _) => {
                             res_sub = Some(sub_toml);
                             break;
                         }
+                        // toml-level override
+                        (false, true) => {
+                            let (_, use_val) =
+                                sub_toml.get_key_value("use").expect("already checked");
+                            if let toml::Value::Boolean(true) = use_val {
+                                res_sub = Some(sub_toml);
+                                break;
+                            }
+                        }
+                        (false, false) => continue,
                     }
                 }
 
@@ -314,4 +363,62 @@ fn read_litstr_to_toml(litstr: &LitStr) -> Result<Option<toml::Table>, pm2::Toke
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use syn::{parse_macro_input, Macro};
+
+    use super::*;
+
+    /// Test parsing of some syntax, as well as checking that the re-generated token stream
+    /// is the same as the input.
+    macro_rules! test_parse {
+        ($data_type: ident: $test_fn: ident {$($tokens: tt)*}) => {
+            #[test]
+            fn $test_fn() {
+                let tokens = quote::quote! {
+                    $($tokens)*
+                };
+                let input: $data_type = syn::parse2(tokens.clone()).expect("failed to parse input from tokenstream");
+
+                let output = input.to_token_stream();
+                assert_eq!(tokens.to_string(), output.to_string(), "generated tokenstream and original tokenstream do not match");
+            }
+        };
+    }
+
+    test_parse!(MacroInput: test_parse_template_new {
+        const X: "some_file_path.toml";
+    });
+
+    test_parse!(MacroInput: test_parse_template_empty_brace {
+        const X: "some_file_path.toml" {}
+    });
+
+    test_parse!(MacroInput: test_parse_template_and_subs {
+        pub const X: "some_file_path.toml" {
+            "some_sub_file_path.toml";
+            "some_other_sub_file_path.toml";
+        }
+    });
+
+    test_parse!(MacroInput: test_parse_public_static {
+        pub static X: "some_file_path.toml" {
+            "some_sub_file_path.toml";
+            "some_other_sub_file_path.toml";
+        }
+    });
+
+    test_parse!(MacroInput: test_parse_template_use_subs {
+        pub const X: "some_file_path.toml" {
+            use "some_sub_file_path.toml";
+            "some_other_sub_file_path.toml";
+        }
+    });
+
+    test_parse!(UsePath: test_parse_use_path_used {
+        use "some_file_path.toml"
+    });
+
+    test_parse!(UsePath: test_parse_use_path_unused {
+        "some_file_path.toml"
+    });
+}

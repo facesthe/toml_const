@@ -1,0 +1,133 @@
+# Example TOML file with all supported data types
+
+# String
+title = "TOML Example"
+
+# Integer
+age = 25
+
+# Float
+pi = 3.1
+
+# Boolean
+is_active = true
+
+# Datetime
+dob = 1987-07-05T17:45:00Z
+
+# Array
+colors = ["red", "green", "blue"]
+
+# Array of Integers
+numbers = [1, 2, 3, 4, 5]
+
+# Array of Floats
+temperatures = [98.6, 99.5, 100.1]
+
+# Array of Booleans
+flags = [true, false, true]
+
+# Array of Datetimes
+timestamps = [1987-07-05T17:45:00Z, 1990-01-01T00:00:00Z, 2025-04-08T12:00:00Z]
+
+# Array of Tables
+[[products]]
+name = "Laptop"
+price = 999.99
+
+[[products]]
+name = "Smartphone"
+price = 499.99
+
+[[products]]
+name = "Tablet"
+price = 299.99
+
+# Table
+[owner]
+name = "John Doe"
+dob = 1990-01-01T00:00:00Z
+
+# identically named tables must not conflict - they are defined in separate modules
+credentials = { username = "john's username", password = "john's password" }
+
+# Nested Table
+[database]
+server = "192.168.1.1"
+ports = [8001, 8002, 8003]
+connection_max = 5000
+enabled = true
+
+[database.credentials]
+username = "admin"
+password = "secret"
+
+# Inline Table
+point = { x = 1, y = 2 }
+
+# everything below contains examples from the toml specification
+
+# keys that start with a number are underscored
+"127.0.0.1" = "value"
+"character encoding" = "value"
+"ʎǝʞ" = "value"
+'key2' = "value"
+'quoted "value"' = "value"
+
+name = "Orange"
+physical.color = "orange"
+physical.shape = "round"
+site."google.com" = true
+
+odt1 = 1979-05-27T07:32:00Z
+odt2 = 1979-05-27T00:32:00-07:00
+odt3 = 1979-05-27T00:32:00.999999-07:00
+odt4 = 1979-05-27 07:32:00Z
+
+ldt1 = 1979-05-27T07:32:00
+ldt2 = 1979-05-27T00:32:00.999999
+
+ld1 = 1979-05-27
+
+lt1 = 07:32:00
+lt2 = 00:32:00.999999
+
+# array elements must all be of the same type
+[[fruits]]
+name = "apple"
+
+# this needs to work
+# [fruits.physical]  # subtable
+# color = "red"
+# shape = "round"
+
+[[fruits.varieties]] # nested array of tables
+name = "red delicious"
+
+[[fruits.varieties]]
+name = "granny smith"
+
+
+[[fruits]]
+name = "banana"
+
+[[fruits.varieties]]
+name = "plantain"
+
+[win]
+someofthis = false
+
+[[win.an_array]]
+value = 10
+something = { this = "false", that = true }
+# this_value = 100
+
+[[win.an_array]]
+value = 0
+something = { this = "false", that = false }
+
+[[win.an_array]]
+value = 0
+something = { this = "false", that = false }
+# some = false
+# other_value = 100

@@ -7,8 +7,14 @@ on:
   push:
     # Pattern matched against refs/tags
     tags:
-      - '*'           # Push events to every tag not containing /
+      # version tags
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run flag - clear this to publish'
+        required: true
+        default: '--dry-run'
 
 name: Publish
 
@@ -18,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
@@ -27,6 +33,9 @@ jobs:
           toolchain: stable
           override: true
 
-      - run: cargo publish --token ${CRATES_IO_TOKEN}
+      - run: |
+          cargo publish --package toml_const_macros --token ${CRATES_IO_TOKEN} ${{inputs.dry_run}}
+          cargo publish --package toml_const --token ${CRATES_IO_TOKEN} ${{inputs.dry_run}}
+
         env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}

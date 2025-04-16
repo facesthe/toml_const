@@ -1,10 +1,10 @@
 [package]
 name = "toml_const"
-version = "0.1.1"
-edition = "2021"
-rust-version = "1.56"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Compile-time constants from TOML"
-readme = "README.md"
+readme = "../README.md"
 repository = "https://github.com/facesthe/toml_const"
 license = "MIT"
 keywords = ["toml", "config", "static"]
@@ -18,4 +18,4 @@ path = "src/lib.rs"
 
 [dependencies]
 toml = "0.8"
-macros = { path = "../toml_const_macros", package = "toml_const_macros" }
+macros = { path = "../toml_const_macros", package = "toml_const_macros", version = "0.1.1" }

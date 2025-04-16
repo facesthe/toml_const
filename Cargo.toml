@@ -1,4 +1,8 @@
 [workspace]
 members = ["toml_const", "toml_const_macros"]
+resolver = "2"
 
 [workspace.package]
+edition = "2021"
+version = "0.1.1"
+rust-version = "1.56"

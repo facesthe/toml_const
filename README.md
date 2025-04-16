@@ -6,9 +6,9 @@
 
 <!-- ![crate license](https://img.shields.io/crates/l/toml_const) -->
 ![no std](https://img.shields.io/badge/no__std-12a077)
-![crate version](https://img.shields.io/crates/v/toml_const)
-![docs](https://img.shields.io/docsrs/toml_const)
-![build status](https://img.shields.io/github/actions/workflow/status/facesthe/toml_const/.github%2Fworkflows%2Fci.yml)
+[![crate](https://img.shields.io/crates/v/toml_const.svg)](https://crates.io/crates/toml_const)
+[![docs](https://docs.rs/toml_const/badge.svg)](https://docs.rs/toml_const)
+[![build status](https://github.com/facesthe/toml_const/actions/workflows/ci.yml/badge.svg)](https://github.com/facesthe/toml_const/actions/workflows/ci.yml)
 
 </div>
 
@@ -17,7 +17,15 @@
 ```rust
 use toml_const::{toml_const, toml_const_ws};
 
-// public struct
+// workspace root
+// ├── example.toml
+// ├── toml_const       <---- you are here
+// │   ├── Cargo.toml
+// │   └── src
+// └── toml_const_macros
+//     ├── Cargo.toml
+//     └── src
+
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
     pub const EXAMPLE_TOML: "../example.toml";
@@ -25,7 +33,6 @@ toml_const! {
     static CARGO_TOML: "Cargo.toml";
 }
 
-// private struct
 // include a file relative to your workspace root
 toml_const_ws! {static EXAMPLE_TOML_WS: "example.toml";}
 

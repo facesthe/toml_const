@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_sub_tables() {
-        let cargo_manifest = include_str!("../../../Cargo.toml");
+        let cargo_manifest = include_str!("../Cargo.toml");
         let toml: toml::Table = toml::Table::from_str(cargo_manifest).unwrap();
 
         let table_defs = def_inner_tables(
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_instantiation() {
-        let cargo_manifest = include_str!("../../../Cargo.toml");
+        let cargo_manifest = include_str!("../Cargo.toml");
         let toml: toml::Table = toml::Table::from_str(cargo_manifest).unwrap();
 
         let root_ident = Ident::new("ROOT_TABLE", Span::call_site());

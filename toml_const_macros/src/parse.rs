@@ -364,7 +364,6 @@ fn read_litstr_to_toml(litstr: &LitStr) -> Result<Option<toml::Table>, pm2::Toke
 
 #[cfg(test)]
 mod tests {
-    use syn::{parse_macro_input, Macro};
 
     use super::*;
 

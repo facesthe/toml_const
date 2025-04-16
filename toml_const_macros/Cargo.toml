@@ -1,0 +1,19 @@
+[package]
+name = "toml_const_macros"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.56"
+description = "proc-macros for toml_const"
+repository = "https://github.com/facesthe/toml_const/src/toml_const_macros"
+license = "MIT"
+keywords = []
+categories = ["development-tools::build-utils"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2"
+quote = "1"
+proc-macro2 = "1"
+toml = "0.8"

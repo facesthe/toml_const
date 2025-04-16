@@ -1,4 +1,4 @@
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../../README.md")]
 #![no_std]
 
 use core::ops::Deref;
@@ -29,7 +29,7 @@ mod tests {
 
     // example.toml must parse completely
     macros::toml_const! {
-        pub const TOML_CONST_EXAMPLE: "./example.toml";
+        pub const TOML_CONST_EXAMPLE: "../example.toml";
 
         static CARGO_TOML: "Cargo.toml" {
             "src/toml_const_macros/Cargo.toml";

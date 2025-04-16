@@ -20,7 +20,7 @@ use toml_const::{toml_const, toml_const_ws};
 // public struct
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
-    pub const EXAMPLE_TOML: "example.toml";
+    pub const EXAMPLE_TOML: "../example.toml";
     // multiple definitions are supported
     static CARGO_TOML: "Cargo.toml";
 }
@@ -53,12 +53,12 @@ use toml_const::toml_const;
 
 toml_const! {
     // example.toml is the template/parent file (must exist)
-    pub static EXAMPLE_TOML: "example.toml" {
+    pub static EXAMPLE_TOML: "../example.toml" {
         // if Cargo.toml exists, it will be substituted
-        use "Cargo.toml";
+        use "../Cargo.toml";
         // if Cargo.toml does not exist and example.toml contains
         // `use = true`, it will be substituted
-        "example.toml";
+        "../example.toml";
         // files that do not exist are ignored
         "non_existent.toml";
         // .. and so on

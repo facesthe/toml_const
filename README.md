@@ -20,14 +20,14 @@ use toml_const::{toml_const, toml_const_ws};
 // public struct
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
-    pub const EXAMPLE_TOML: "example.toml"
+    pub const EXAMPLE_TOML: "example.toml";
     // multiple definitions are supported
-    static CARGO_TOML: "Cargo.toml"
+    static CARGO_TOML: "Cargo.toml";
 }
 
 // private struct
 // include a file relative to your workspace root
-toml_const_ws! {static EXAMPLE_TOML_WS: "example.toml"}
+toml_const_ws! {static EXAMPLE_TOML_WS: "example.toml";}
 
 // table keys are capitalized struct fields
 const TITLE: &str = EXAMPLE_TOML.TITLE;
@@ -36,7 +36,14 @@ assert_eq!(EXAMPLE_TOML.TITLE, EXAMPLE_TOML_WS.TITLE);
 
 ## Table substitution
 
-Multiple child files can be specified in the macro expression.
+File substitution is supported.
+The first path that exists and satisfies the following conditions will be used.
+These conditions are, in order of precedence:
+
+- if a substitute path has the `use` keyword prefixed
+- iif a toml file contains `use = true` at the root level
+
+Multiple substitute files can be specified in the macro expression.
 The first file containing a `use = true` key will be merged into the parent file.
 
 These files may contain secrets or other sensitive information that you don't want to check into version control.
@@ -47,11 +54,10 @@ use toml_const::toml_const;
 toml_const! {
     // example.toml is the template/parent file (must exist)
     pub static EXAMPLE_TOML: "example.toml" {
-        // the first file with use = true will be merged into the parent file
-        //
-        // as none of the files have use = true,
-        // only example.toml is used
-        "Cargo.toml";
+        // if Cargo.toml exists, it will be substituted
+        use "Cargo.toml";
+        // if Cargo.toml does not exist and example.toml contains
+        // `use = true`, it will be substituted
         "example.toml";
         // files that do not exist are ignored
         "non_existent.toml";

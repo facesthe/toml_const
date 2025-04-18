@@ -483,8 +483,6 @@ pub fn def_inner_tables(table: &toml::Table, key: &Key<'_>) -> pm2::TokenStream 
         #self_def
 
         pub mod #mod_self {
-            use super::toml_const;
-
             #inner_defs
         }
     }
@@ -500,20 +498,6 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-
-    // #[test]
-    // fn test_screaming_snake_case() {
-    //     let input = "hello world";
-    //     let res = input.to_variable_ident();
-    //     assert_eq!(res, "HELLO_WORLD");
-    // }
-
-    // #[test]
-    // fn test_camel_case() {
-    //     let input = "hello world";
-    //     let res = to_camel_case(input);
-    //     assert_eq!(res, "HelloWorld");
-    // }
 
     #[test]
     fn test_sub_tables() {

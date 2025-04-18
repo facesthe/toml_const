@@ -22,20 +22,3 @@ impl<T: 'static + Copy> Deref for crate::Array<T> {
         self.0
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate as toml_const;
-
-    // example.toml must parse completely
-    macros::toml_const! {
-        pub const TOML_CONST_EXAMPLE: "../example.toml";
-
-        static CARGO_TOML: "Cargo.toml" {
-            "src/toml_const_macros/Cargo.toml";
-            "non_existent.toml";
-        }
-    }
-
-    macros::toml_const_ws! {pub static TOML_CONST_EXAMPLE_WS: "./example.toml"; }
-}

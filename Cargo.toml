@@ -1,5 +1,5 @@
 [workspace]
-members = ["toml_const", "toml_const_macros"]
+members = ["toml_const", "toml_const_macros", "toml_const_tests"]
 resolver = "2"
 
 [workspace.package]

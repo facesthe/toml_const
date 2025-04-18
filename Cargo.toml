@@ -4,5 +4,6 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "1.0.0"
+# remember to update macro version depended on in toml_const/Cargo.toml
+version = "1.0.1"
 rust-version = "1.56"

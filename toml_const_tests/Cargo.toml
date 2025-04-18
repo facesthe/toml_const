@@ -1,0 +1,8 @@
+[package]
+name = "toml_const_tests"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+toml_const = { path = "../toml_const" }

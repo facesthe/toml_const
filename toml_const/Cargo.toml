@@ -17,5 +17,5 @@ name = "toml_const"
 path = "src/lib.rs"
 
 [dependencies]
-toml = "0.8"
+toml = { workspace = true }
 macros = { path = "../toml_const_macros", package = "toml_const_macros", version = "1.0.1" }

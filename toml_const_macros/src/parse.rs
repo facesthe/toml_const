@@ -6,8 +6,12 @@ use std::path::{Path, PathBuf};
 use proc_macro2 as pm2;
 use proc_macro2::{Delimiter, Group};
 use quote::{quote, ToTokens, TokenStreamExt};
+use syn::spanned::Spanned;
 use syn::Ident;
 use syn::{braced, parse::Parse, punctuated::Punctuated, LitStr};
+
+/// Attribute for converting all datetime values to their unwrapped equivalents.
+const UNWRAP_DATETIME: &str = "unwrap_datetime";
 
 #[derive(Clone)]
 pub struct MultipleMacroInput(pub Vec<MacroInput>);
@@ -15,6 +19,10 @@ pub struct MultipleMacroInput(pub Vec<MacroInput>);
 /// Input to [toml_const!](crate::toml_const)
 #[derive(Clone)]
 pub struct MacroInput {
+    pub attrs: Vec<syn::Attribute>,
+
+    pub destructure_datetime: bool,
+
     /// Whether the static variable is public
     pub is_pub: bool,
 
@@ -23,6 +31,9 @@ pub struct MacroInput {
 
     /// Static item identifier
     pub item_ident: Ident,
+
+    /// `final` marks if the input file can be substituted
+    pub is_final: bool,
 
     /// Path to the template file, mandatory
     pub path: LitStr,
@@ -53,6 +64,35 @@ impl Parse for MultipleMacroInput {
 
 impl Parse for MacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // parse docstring and datetime attr
+        let attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
+
+        let destructure_datetime = attrs.iter().any(|a| match a.meta.require_path_only() {
+            Ok(path) => path.is_ident(UNWRAP_DATETIME),
+            Err(_) => false,
+        });
+
+        for attr in attrs.iter() {
+            match &attr.meta {
+                syn::Meta::Path(path) => match path.is_ident(UNWRAP_DATETIME) {
+                    true => (),
+                    false => {
+                        return Err(syn::Error::new(
+                            path.span(),
+                            format!("unknown attribute, expected `#[{}]`", UNWRAP_DATETIME),
+                        ))
+                    }
+                },
+                syn::Meta::List(ml) => {
+                    return Err(syn::Error::new(
+                        ml.span(),
+                        "metalist attributes are not allowed",
+                    ))
+                }
+                syn::Meta::NameValue(_) => (),
+            }
+        }
+
         let is_pub: bool = {
             let lookahead = input.lookahead1();
             match lookahead.peek(syn::Token![pub]) {
@@ -83,9 +123,22 @@ impl Parse for MacroInput {
 
         let item_ident: syn::Ident = input.parse()?;
         let _: syn::Token![:] = input.parse()?;
-        let template: LitStr = input.parse()?;
-        let lookahead = input.lookahead1();
 
+        let is_final = {
+            let lookahead = input.lookahead1();
+
+            match lookahead.peek(syn::Token![final]) {
+                true => {
+                    let _: syn::Token![final] = input.parse()?;
+                    true
+                }
+                false => false,
+            }
+        };
+
+        let template: LitStr = input.parse()?;
+
+        let lookahead = input.lookahead1();
         let sub_paths = match lookahead.peek(syn::Token![;]) {
             true => {
                 let _: syn::Token![;] = input.parse()?;
@@ -106,18 +159,31 @@ impl Parse for MacroInput {
             },
         };
 
-        Ok(Self {
-            is_pub,
-            static_const,
-            item_ident,
-            path: template,
-            sub_paths,
-        })
+        match is_final && sub_paths.is_some() {
+            true => Err(syn::Error::new(
+                template.span(),
+                "final inputs cannot accept substitutions",
+            )),
+            false => Ok(Self {
+                attrs,
+                destructure_datetime,
+                is_pub,
+                static_const,
+                item_ident,
+                is_final,
+                path: template,
+                sub_paths,
+            }),
+        }
     }
 }
 
 impl ToTokens for MacroInput {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
+
         if self.is_pub {
             quote! {pub}.to_tokens(tokens);
         }
@@ -129,6 +195,11 @@ impl ToTokens for MacroInput {
 
         self.item_ident.to_tokens(tokens);
         quote! {:}.to_tokens(tokens);
+
+        if self.is_final {
+            quote! {final}.to_tokens(tokens);
+        }
+
         self.path.to_tokens(tokens);
 
         match &self.sub_paths {
@@ -280,8 +351,7 @@ impl MacroInput {
                         }
                         // toml-level override
                         (false, true) => {
-                            let (_, use_val) =
-                                sub_toml.get_key_value("use").expect("already checked");
+                            let use_val = sub_toml.get("use").expect("already checked");
                             if let toml::Value::Boolean(true) = use_val {
                                 res_sub = Some(sub_toml);
                                 break;
@@ -302,6 +372,16 @@ impl MacroInput {
         };
 
         Ok(merged)
+    }
+
+    pub fn doc_attrs(&self) -> Vec<&syn::Attribute> {
+        self.attrs
+            .iter()
+            .filter(|a| match a.meta.require_name_value() {
+                Ok(nv) => nv.path.is_ident("doc"),
+                Err(_) => false,
+            })
+            .collect()
     }
 }
 
@@ -411,6 +491,17 @@ mod tests {
             use "some_sub_file_path.toml";
             "some_other_sub_file_path.toml";
         }
+    });
+
+    test_parse!(MacroInput: test_parse_template_final {
+        pub const X: final "some_file_path.toml";
+    });
+
+    test_parse!(MacroInput: test_parse_template_with_attributes {
+        /// Docstring = #[doc = "Docstring"]
+        /// Another docstring line
+        #[unwrap_datetime]
+        pub const X: final "some_file_path.toml";
     });
 
     test_parse!(UsePath: test_parse_use_path_used {

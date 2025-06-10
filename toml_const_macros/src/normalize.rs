@@ -14,6 +14,21 @@
 
 use std::collections::HashMap;
 
+use toml::value::{Date, Datetime};
+
+const DEFAULT_DATE: Date = Date {
+    year: 1970,
+    month: 1,
+    day: 1,
+};
+const DEFAULT_TIME: toml::value::Time = toml::value::Time {
+    hour: 0,
+    minute: 0,
+    second: 0,
+    nanosecond: 0,
+};
+const DEFAULT_OFFSET: toml::value::Offset = toml::value::Offset::Z;
+
 #[derive(Clone, Debug)]
 pub enum NormalizationError {
     /// A mismatch in value types.
@@ -88,30 +103,9 @@ impl From<TomlValue> for toml::Value {
             TomlValue::Boolean => toml::Value::Boolean(Default::default()),
             TomlValue::Datetime { date, time, offset } => {
                 toml::Value::Datetime(toml::value::Datetime {
-                    date: if date {
-                        Some(toml::value::Date {
-                            year: 1970,
-                            month: 1,
-                            day: 1,
-                        })
-                    } else {
-                        None
-                    },
-                    time: if time {
-                        Some(toml::value::Time {
-                            hour: 0,
-                            minute: 0,
-                            second: 0,
-                            nanosecond: 0,
-                        })
-                    } else {
-                        None
-                    },
-                    offset: if offset {
-                        Some(toml::value::Offset::Z)
-                    } else {
-                        None
-                    },
+                    date: if date { Some(DEFAULT_DATE) } else { None },
+                    time: if time { Some(DEFAULT_TIME) } else { None },
+                    offset: if offset { Some(DEFAULT_OFFSET) } else { None },
                 })
             }
             TomlValue::Array(elements) => {
@@ -133,8 +127,8 @@ impl From<toml::Value> for TomlValue {
             toml::Value::Boolean(_) => Self::Boolean,
             toml::Value::Datetime(datetime) => Self::Datetime {
                 date: datetime.date.is_some(),
-                time: datetime.time.is_none(),
-                offset: datetime.offset.is_none(),
+                time: datetime.time.is_some(),
+                offset: datetime.offset.is_some(),
             },
             toml::Value::Array(values) => {
                 Self::Array(values.into_iter().map(|v| v.into()).collect())
@@ -151,7 +145,68 @@ impl From<toml::Table> for TomlValue {
 }
 
 impl TomlValue {
+    /// This method assumes that [TomlValue::normalize] is already called.
+    pub fn normalize_toml(&self, toml: &mut toml::Value) {
+        match (self, toml) {
+            (TomlValue::String, toml::Value::String(_))
+            | (TomlValue::Integer, toml::Value::Integer(_))
+            | (TomlValue::Float, toml::Value::Float(_))
+            | (TomlValue::Boolean, toml::Value::Boolean(_)) => (),
+
+            (
+                TomlValue::Datetime {
+                    date: tv_date,
+                    time: tv_time,
+                    offset: tv_offset,
+                },
+                toml::Value::Datetime(Datetime { date, time, offset }),
+            ) => {
+                if *tv_date && date.is_none() {
+                    *date = Some(DEFAULT_DATE)
+                }
+
+                if *tv_time && time.is_none() {
+                    *time = Some(DEFAULT_TIME)
+                }
+
+                if *tv_offset && offset.is_none() {
+                    *offset = Some(DEFAULT_OFFSET)
+                }
+            }
+            (TomlValue::Array(toml_values), toml::Value::Array(values)) => {
+                match toml_values.first() {
+                    Some(toml_value) => {
+                        for val in values {
+                            toml_value.normalize_toml(val);
+                        }
+                    }
+                    None => (),
+                }
+            }
+            (TomlValue::Table(hash_map), toml::Value::Table(map)) => {
+                for (key, value) in hash_map {
+                    match (map.get_mut(key), value) {
+                        (Some(toml_value), _) => {
+                            value.normalize_toml(toml_value);
+                        }
+                        // for missing keys that point to arrays, we initialize them as empty arrays
+                        (None, TomlValue::Array(_)) => {
+                            map.insert(key.to_owned(), toml::Value::Array(vec![]));
+                        }
+                        (None, _) => {
+                            map.insert(key.to_owned(), value.clone().into());
+                        }
+                    }
+                }
+            }
+
+            _ => unimplemented!("normalizing different types cannot be done"),
+        }
+    }
+
     /// Derive a normalized version of [Self].
+    ///
+    /// At this point, the schema of [Self] will be superset of the original.
     pub fn normalize(&self) -> Result<Self, NormalizationError> {
         match self {
             TomlValue::Array(toml_values) => match toml_values.first() {
@@ -343,7 +398,7 @@ mod tests {
         const NORMALIZE_FILE: &str = include_str!("../../normalize.toml");
 
         let parsed = toml::Table::from_str(NORMALIZE_FILE).expect("must parse");
-        let toml_val = TomlValue::from(parsed);
+        let toml_val = TomlValue::from(parsed.clone());
 
         println!("original: {:#?}", toml_val);
 
@@ -353,11 +408,10 @@ mod tests {
         };
         println!("normalized: {:#?}", normalized);
 
-        let table = toml::Value::from(normalized);
-        let table = table.as_table().unwrap();
+        let mut og_value = toml::Value::Table(parsed.clone());
+        normalized.normalize_toml(&mut og_value);
+        let norm_table = og_value.as_table().unwrap();
 
-        println!("re-exported: {}", table);
-
-        // println!("normalized: {:#?}", normalized);
+        println!("norm table: {:#?}", norm_table);
     }
 }

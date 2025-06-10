@@ -1,0 +1,44 @@
+# Test normalization logic
+
+[[items]]
+name = "Laptop"
+price = 1000.00
+# as all variants of datetimes are used, the union format is offsetdatetime
+purchase_date = 2023-10-10
+
+[[items]]
+name = "Tablet"
+purchase_date = 12:00:00
+versions = [
+    { version = "1.0", mass = 0.5, applications = [
+        { name = "App1", version = "1.0", stuff = false },
+        { name = "App2", version = "2.0" },
+    ], storage = [
+        { type = "SSD", size = 256 },
+        { type = "HDD", size = 1024 },
+    ] },
+]
+
+[[items]]
+name = "Smartwatch"
+purchase_date = 2023-10-11T14:30:00Z
+versions = [
+    { version = "1.0", mass = 0.2, applications = [
+        { name = "App1", version = "1.0" },
+        { name = "App2", version = "2.0" },
+    ], storage = [
+    ] },
+]
+
+[[items]]
+name = "Smartphone"
+purchase_date = 2023-10-12T09:00:00+02:00
+versions = [
+    { version = "1.0", mass = 0.3, applications = [
+        { name = "App1", version = "1.0" },
+        { name = "App2", version = "2.0" },
+    ], storage = [
+        { type = "SSD", size = 128 },
+        { type = "HDD", size = 512, archive = false },
+    ] },
+]

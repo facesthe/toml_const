@@ -14,7 +14,12 @@
 
 use std::collections::HashMap;
 
+use proc_macro2 as pm2;
+use proc_macro2::Span;
+use quote::quote;
 use toml::value::{Date, Datetime};
+
+use crate::custom_struct::ConstIdentDef;
 
 const DEFAULT_DATE: Date = Date {
     year: 1970,
@@ -350,6 +355,99 @@ impl TomlValue {
             }
         }
     }
+
+    /// Recursively define array and table types.
+    ///
+    /// `Self` should be normalized first.
+    #[allow(unused)]
+    fn definition(&self, key: &str) -> pm2::TokenStream {
+        match self {
+            TomlValue::String => quote! {&'static str},
+            TomlValue::Integer => quote! {i64},
+            TomlValue::Float => quote! {f64},
+            TomlValue::Boolean => quote! {bool},
+            TomlValue::Datetime { date, time, offset } => {
+                let dt_ident = date_time_struct_ident(*date, *time, *offset);
+                quote! {#dt_ident}
+            }
+            Self::Array(arr) => match arr.len() {
+                0 => todo!("handle case - empty array inferred to be bool arr"),
+                1 => {
+                    let inner_value = &arr[0];
+
+                    inner_value.definition(key)
+                }
+                _ => unimplemented!("normalized array should have 0 or 1 elements"),
+            },
+            Self::Table(tab) => {
+                let self_ident = key.to_type_ident();
+                let self_mod = key.to_module_ident();
+
+                let mut x = 0;
+
+                let fields = tab
+                    .iter()
+                    .map(|(k, v)| {
+                        x += 1;
+                        // let field_ident = k.to_variable_ident();
+                        let field_ident = syn::Ident::new(&k, Span::call_site());
+
+                        let field_type = match v {
+                            TomlValue::String => quote! {&'static str},
+                            TomlValue::Integer => quote! {i64},
+                            TomlValue::Float => quote! {f64},
+                            TomlValue::Boolean => quote! {bool},
+                            TomlValue::Datetime { date, time, offset } => {
+                                let dt_ident = date_time_struct_ident(*date, *time, *offset);
+                                quote! {#dt_ident}
+                            }
+                            TomlValue::Array(_) => {
+                                let id = k.to_type_ident();
+                                quote! {&'static [#self_mod :: #id]}
+                            }
+                            TomlValue::Table(_) => {
+                                let id = k.to_type_ident();
+                                quote! {#self_mod :: #id}
+                            }
+                        };
+
+                        quote! {
+                            pub #field_ident: #field_type,
+                        }
+                    })
+                    .collect::<pm2::TokenStream>();
+
+                let inner_definitions = tab
+                    .iter()
+                    .filter(|(_, v)| matches!(v, TomlValue::Array(_) | TomlValue::Table(_)))
+                    .map(|(k, v)| v.definition(k))
+                    .collect::<pm2::TokenStream>();
+
+                quote! {
+                    // table definition
+                    pub struct #self_ident {
+                        #fields
+                    }
+
+                    pub mod #self_mod {
+                        #inner_definitions
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn date_time_struct_ident(date: bool, time: bool, offset: bool) -> syn::Ident {
+    match (date, time, offset) {
+        (_, _, true) => syn::Ident::new("OffsetDateTime", Span::call_site()),
+        (true, true, false) => syn::Ident::new("LocalDateTime", Span::call_site()),
+        (true, false, false) => syn::Ident::new("LocalDate", Span::call_site()),
+        (false, true, false) => syn::Ident::new("LocalTime", Span::call_site()),
+        (false, false, false) => {
+            unimplemented!("datetime cannot be constructed without any components")
+        }
+    }
 }
 
 impl NormalizationError {
@@ -413,5 +511,7 @@ mod tests {
         let norm_table = og_value.as_table().unwrap();
 
         println!("norm table: {:#?}", norm_table);
+
+        println!("definition: {}", normalized.definition("TOP_LEVEL_TABLE"));
     }
 }

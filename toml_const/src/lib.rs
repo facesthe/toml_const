@@ -28,6 +28,21 @@ impl<T: 'static + Copy> Deref for crate::Array<T> {
 mod datetime {
     use super::*;
 
+    const DEFAULT_DATE: Date = Date {
+        year: 1970,
+        month: 1,
+        day: 1,
+    };
+
+    const DEFAULT_TIME: Time = Time {
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0,
+    };
+
+    const DEFAULT_OFFSET: Offset = Offset::Z;
+
     #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
     pub struct OffsetDateTime {
         pub date: Date,
@@ -49,6 +64,37 @@ mod datetime {
     #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
     pub struct LocalTime {
         pub time: Time,
+    }
+
+    impl Default for OffsetDateTime {
+        fn default() -> Self {
+            Self {
+                date: DEFAULT_DATE,
+                time: DEFAULT_TIME,
+                offset: DEFAULT_OFFSET,
+            }
+        }
+    }
+
+    impl Default for LocalDateTime {
+        fn default() -> Self {
+            Self {
+                date: DEFAULT_DATE,
+                time: DEFAULT_TIME,
+            }
+        }
+    }
+
+    impl Default for LocalDate {
+        fn default() -> Self {
+            Self { date: DEFAULT_DATE }
+        }
+    }
+
+    impl Default for LocalTime {
+        fn default() -> Self {
+            Self { time: DEFAULT_TIME }
+        }
     }
 
     impl From<OffsetDateTime> for Datetime {

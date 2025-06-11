@@ -1,5 +1,6 @@
 mod check;
 mod custom_struct;
+mod normalize;
 mod parse;
 
 use std::path::PathBuf;
@@ -11,6 +12,8 @@ use proc_macro2::{self as pm2, Span};
 use parse::{MacroInput, MultipleMacroInput};
 use quote::{quote, ToTokens};
 use syn::parse_macro_input;
+
+use crate::normalize::TomlValue;
 
 /// Instantiate a const definition of the contents from a TOML file.
 ///
@@ -136,14 +139,22 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         Err(e) => return e.into(),
     }
 
-    match check::check(&toml_table) {
-        Ok(_) => (),
+    // perform normalization
+    let toml_val_table = TomlValue::from(toml_table.clone());
+    let toml_val_table = match toml_val_table.normalize() {
+        Ok(n) => n,
         Err(e) => {
             return syn::Error::new(Span::call_site(), e.to_string())
                 .to_compile_error()
-                .into();
+                .into()
         }
-    }
+    };
+
+    let mut toml_table_val = toml::Value::Table(toml_table);
+    toml_val_table.normalize_toml(&mut toml_table_val);
+    let toml_table = toml_table_val
+        .as_table()
+        .expect("conversion back to table must not fail");
 
     let table_definitions = def_inner_tables(
         &toml_table,

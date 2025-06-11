@@ -40,15 +40,18 @@ pub trait Instantiate {
 /// Create identifiers for variables and types from a string.
 pub trait ConstIdentDef {
     /// Create a valid variable identifier, formatted as SCREAMING_SNAKE_CASE.
-    fn to_variable_ident(&self) -> String;
+    fn to_variable_ident(&self) -> syn::Ident;
 
     /// Create a valid module identifier, formatted as snake_case.
-    fn to_module_ident(&self) -> String {
-        self.to_variable_ident().to_lowercase()
+    fn to_module_ident(&self) -> syn::Ident {
+        syn::Ident::new(
+            &self.to_variable_ident().to_string().to_lowercase(),
+            Span::call_site(),
+        )
     }
 
     /// Create a valid type identifier, formatted as PascalCase.
-    fn to_type_ident(&self) -> String;
+    fn to_type_ident(&self) -> syn::Ident;
 
     /// Create an array type identifier formatted as PascalCase.
     fn to_array_type_ident(&self) -> String {
@@ -60,7 +63,7 @@ impl<T> ConstIdentDef for T
 where
     T: AsRef<str>,
 {
-    fn to_variable_ident(&self) -> String {
+    fn to_variable_ident(&self) -> syn::Ident {
         let self_ref = self.as_ref();
 
         let inter = self_ref.replace(REPLACE_CHARS, "_");
@@ -71,13 +74,15 @@ where
             .collect::<Vec<_>>()
             .join("_");
 
-        match inter.starts_with(char::is_numeric) {
+        let inter = match inter.starts_with(char::is_numeric) {
             true => format!("_{}", inter),
             false => inter,
-        }
+        };
+
+        syn::Ident::new(&inter, Span::call_site())
     }
 
-    fn to_type_ident(&self) -> String {
+    fn to_type_ident(&self) -> syn::Ident {
         let inter = self.as_ref().replace(REPLACE_CHARS, "_");
 
         let inter = match inter.contains("_") {
@@ -126,10 +131,12 @@ where
             }
         };
 
-        match inter.starts_with(char::is_numeric) {
+        let inter = match inter.starts_with(char::is_numeric) {
             true => format!("_{}", inter),
             false => inter,
-        }
+        };
+
+        syn::Ident::new(&inter, Span::call_site())
     }
 }
 
@@ -183,7 +190,6 @@ impl ValueType for toml::Value {
             }
             toml::Value::Table(_) => {
                 let type_name = key.to_type_ident();
-                let type_name = pm2::Ident::new(&type_name, proc_macro2::Span::call_site());
 
                 quote! { #parent_ident :: #type_name }
             }
@@ -197,9 +203,7 @@ impl Instantiate for toml::Value {
 
         // for predefined types
         let inner = key.value();
-        let field_name = inner.to_variable_ident();
-
-        let field = pm2::Ident::new(&field_name, proc_macro2::Span::call_site());
+        let field = inner.to_variable_ident();
 
         match (self, key) {
             (
@@ -232,12 +236,9 @@ impl Instantiate for toml::Table {
         // let inner = key.value();
         let field_name = key.value();
 
-        let field = pm2::Ident::new(
-            &field_name.to_variable_ident(),
-            proc_macro2::Span::call_site(),
-        );
-        let table_type = syn::Ident::new(&field_name.to_type_ident(), Span::call_site());
-        let table_mod = syn::Ident::new(&field_name.to_module_ident(), Span::call_site());
+        let field = field_name.to_variable_ident();
+        let table_type = field_name.to_type_ident();
+        let table_mod = field_name.to_module_ident();
 
         let mut parents_inner = parents.clone();
         parents_inner.push(table_mod);
@@ -277,7 +278,7 @@ impl Instantiate for toml::Table {
 
             Key::Var(v) => {
                 let var_name = v.to_string();
-                let new_var = Ident::new(&var_name.to_variable_ident(), v.span());
+                let new_var = var_name.to_variable_ident();
                 quote! {
                     #new_var: #table_type = #table_type {
                         #fields
@@ -306,8 +307,7 @@ impl Instantiate for toml::value::Array {
         match key {
             Key::Element(_) => quote! {toml_const::Array(&[#elements])},
             Key::Field(k) => {
-                let field_key = k.to_variable_ident();
-                let field = pm2::Ident::new(&field_key, proc_macro2::Span::call_site());
+                let field = k.to_variable_ident();
 
                 quote! { #field: toml_const::Array(&[#elements])}
             }
@@ -411,8 +411,7 @@ impl Instantiate for toml::value::Datetime {
         match k {
             Key::Element(_) => self_value,
             Key::Field(val) => {
-                let field_key = val.to_variable_ident();
-                let field = pm2::Ident::new(&field_key, proc_macro2::Span::call_site());
+                let field = val.to_variable_ident();
 
                 quote! { #field: #self_value }
             }
@@ -483,7 +482,6 @@ impl<'a> Key<'a> {
 impl TableTypeDef for toml::Table {
     fn table_type_def(&self, key: &Key<'_>, unwrap: bool) -> proc_macro2::TokenStream {
         let mod_self = key.value().to_module_ident();
-        let mod_self = pm2::Ident::new(&mod_self, proc_macro2::Span::call_site());
 
         let fields = self
             .iter()
@@ -491,7 +489,6 @@ impl TableTypeDef for toml::Table {
                 let field_name = key.to_variable_ident();
 
                 let field_type = val.value_type(key, &mod_self, unwrap);
-                let field_name = pm2::Ident::new(&field_name, proc_macro2::Span::call_site());
 
                 quote! { pub #field_name: #field_type }
             })
@@ -499,8 +496,8 @@ impl TableTypeDef for toml::Table {
 
         let table_type = match key {
             Key::Element(e) => e.to_array_type_ident(),
-            Key::Field(f) => f.to_type_ident(),
-            Key::Var(ident) => ident.to_string().to_type_ident(),
+            Key::Field(f) => f.to_type_ident().to_string(),
+            Key::Var(ident) => ident.to_string().to_type_ident().to_string(),
         };
 
         let table_type = pm2::Ident::new(&table_type, proc_macro2::Span::call_site());
@@ -530,11 +527,21 @@ pub fn def_inner_tables(table: &toml::Table, key: &Key<'_>, unwrap: bool) -> pm2
                 _ => {
                     let first = &arr[0];
 
-                    if let toml::Value::Table(t) = first {
-                        Some(def_inner_tables(t, &Key::Element(key), unwrap))
-                    } else {
-                        None
+                    match first {
+                        toml::Value::Table(t) => {
+                            Some(def_inner_tables(t, &Key::Element(key), unwrap))
+                        }
+                        toml::Value::Array(a) => {
+                            todo!("nested arrays need to be implemented")
+                        }
+                        _ => None,
                     }
+
+                    // if let toml::Value::Table(t) = first {
+
+                    // } else {
+                    //     None
+                    // }
                 }
             },
             toml::Value::Table(tab) => {
@@ -547,7 +554,6 @@ pub fn def_inner_tables(table: &toml::Table, key: &Key<'_>, unwrap: bool) -> pm2
         .collect::<pm2::TokenStream>();
 
     let mod_self = key.value().to_module_ident();
-    let mod_self = pm2::Ident::new(&mod_self, proc_macro2::Span::call_site());
 
     quote! {
         #self_def

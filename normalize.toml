@@ -5,20 +5,18 @@ that = "asdasdads"
 how = 2024-10-10
 num = 3.14
 cond = true
-
 matrix = [[{ name = "value" }], []]
 
 [inner_table]
 name = "Inner Table"
 value = 42
-
+empty = []
 
 [[items]]
 name = "Laptop"
 price = 1000.00
-# as all variants of datetimes are used, the union format is offsetdatetime
+# as all variants of datetimes are used, the union format is offset date time
 purchase_date = 2023-10-10
-# rando = [[1]]
 
 [[items]]
 name = "Tablet"

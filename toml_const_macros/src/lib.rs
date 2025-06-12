@@ -5,7 +5,7 @@ mod parse;
 
 use std::path::PathBuf;
 
-use custom_struct::{def_inner_tables, Instantiate, Key};
+use custom_struct::Instantiate;
 use proc_macro as pm;
 use proc_macro2::{self as pm2, Span};
 
@@ -156,13 +156,14 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         .as_table()
         .expect("conversion back to table must not fail");
 
-    // let table_definitions = def_inner_tables(
-    //     &toml_table,
-    //     &Key::Var(&input.item_ident),
-    //     input.destructure_datetime,
-    // );
+    let derive_attrs = input
+        .attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("derive"))
+        .cloned()
+        .collect::<Vec<_>>();
 
-    let table_definitions = toml_val_table.definition(&input.item_ident.to_string());
+    let table_definitions = toml_val_table.definition(&input.item_ident.to_string(), &derive_attrs);
 
     let instantiation = toml_table.instantiate(&input.item_ident.to_string(), vec![]);
 

@@ -102,7 +102,8 @@ pub fn check_unauthorized_keys(input: &toml::Table) -> Result<(), pm2::TokenStre
 }
 
 /// Main check entry point
-pub fn check(table: &toml::Table) -> Result<(), CheckError> {
+#[allow(unused)]
+fn check(table: &toml::Table) -> Result<(), CheckError> {
     // check that all arrays are consistent
     for (key, value) in table.iter() {
         match value {
@@ -122,6 +123,7 @@ pub fn check(table: &toml::Table) -> Result<(), CheckError> {
 }
 
 /// When receiving an error when performing some op on key+values, this function accumulates current key to the error.
+#[allow(unused)]
 fn propagate_check_error(key: &str, err: CheckError) -> CheckError {
     match err {
         CheckError::KeyMismatch {
@@ -144,6 +146,7 @@ fn propagate_check_error(key: &str, err: CheckError) -> CheckError {
     }
 }
 
+#[allow(unused)]
 fn compare_value(
     key: Option<&str>,
     val_a: &toml::Value,
@@ -177,6 +180,7 @@ fn compare_value(
     }
 }
 
+#[allow(unused)]
 fn check_array_schema(arr: &toml::value::Array) -> Result<(), CheckError> {
     match arr.len() {
         0..2 => (),
@@ -194,6 +198,7 @@ fn check_array_schema(arr: &toml::value::Array) -> Result<(), CheckError> {
     Ok(())
 }
 
+#[allow(unused)]
 fn compare_array_schema(
     key: Option<&str>,
     arr_a: &toml::value::Array,
@@ -209,6 +214,7 @@ fn compare_array_schema(
 }
 
 /// Check that both tables match exactly in keys and types.
+#[allow(unused)]
 pub fn compare_table_schema(
     table_a: &toml::Table,
     table_b: &toml::Table,

@@ -396,7 +396,7 @@ impl TomlValue {
     /// Recursively define array and table types.
     ///
     /// `Self` should be normalized first.
-    pub fn definition(&self, key: &str) -> pm2::TokenStream {
+    pub fn definition(&self, key: &str, derive_attrs: &[syn::Attribute]) -> pm2::TokenStream {
         match self {
             // do not need to define primitive/provided types
             TomlValue::String
@@ -410,7 +410,7 @@ impl TomlValue {
                 1 => {
                     let inner_value = &arr[0];
 
-                    inner_value.definition(key)
+                    inner_value.definition(key, derive_attrs)
                 }
                 _ => unimplemented!("normalized array should have 0 or 1 elements"),
             },
@@ -438,11 +438,18 @@ impl TomlValue {
                 let inner_definitions = tab
                     .iter()
                     .filter(|(_, v)| matches!(v, TomlValue::Array(_) | TomlValue::Table(_)))
-                    .map(|(k, v)| v.definition(k))
+                    .map(|(k, v)| v.definition(k, derive_attrs))
+                    .collect::<pm2::TokenStream>();
+
+                let derives = derive_attrs
+                    .iter()
+                    .map(|attr| quote! { #attr })
                     .collect::<pm2::TokenStream>();
 
                 quote! {
                     // table definition
+                    #[derive(Clone, Copy, Debug)]
+                    #derives
                     pub struct #self_ident {
                         #fields
                     }
@@ -530,6 +537,9 @@ mod tests {
 
         println!("norm table: {:#?}", norm_table);
 
-        println!("definition: {}", normalized.definition("TOP_LEVEL_TABLE"));
+        println!(
+            "definition: {}",
+            normalized.definition("TOP_LEVEL_TABLE", &[])
+        );
     }
 }

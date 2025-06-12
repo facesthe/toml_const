@@ -178,7 +178,7 @@ impl Instantiate for toml::Table {
         let fields = self
             .iter()
             .map(|(f_key, f_val)| {
-                let value = f_val.instantiate(&f_key, parents.clone());
+                let value = f_val.instantiate(f_key, parents.clone());
                 let key = f_key.to_module_ident();
 
                 quote! { #key : #value}
@@ -209,7 +209,7 @@ impl Instantiate for toml::value::Array {
 // datetime structs do not require a key, as they are already defined.
 impl Instantiate for toml::value::Datetime {
     fn instantiate(&self, k: &str, _: Vec<&Ident>) -> proc_macro2::TokenStream {
-        let value = match (self.date, self.time, self.offset) {
+        match (self.date, self.time, self.offset) {
             (Some(d), Some(t), Some(o)) => {
                 let d = d.instantiate(k, vec![]);
                 let t = t.instantiate(k, vec![]);
@@ -254,9 +254,7 @@ impl Instantiate for toml::value::Datetime {
             }
 
             _ => unimplemented!("unsupported datetime combination"),
-        };
-
-        value
+        }
     }
 }
 

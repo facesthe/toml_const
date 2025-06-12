@@ -182,13 +182,10 @@ impl TomlValue {
                 }
             }
             (TomlValue::Array(toml_values), toml::Value::Array(values)) => {
-                match toml_values.first() {
-                    Some(toml_value) => {
-                        for val in values {
-                            toml_value.normalize_toml(val);
-                        }
+                if let Some(toml_value) = toml_values.first() {
+                    for val in values {
+                        toml_value.normalize_toml(val);
                     }
-                    None => (),
                 }
             }
             (TomlValue::Table(hash_map), toml::Value::Table(map)) => {

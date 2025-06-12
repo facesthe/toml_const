@@ -3,7 +3,7 @@
 this = 2
 that = "asdasdads"
 how = 2024-10-10
-num = 3.14
+num = 1.73205080756887729352744
 cond = true
 matrix = [[{ name = "value" }], []]
 

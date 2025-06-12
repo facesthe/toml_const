@@ -45,7 +45,7 @@ pub enum NormalizationError {
         path: Vec<String>,
 
         /// Conflicting value types
-        value_types: (TomlValue, TomlValue),
+        value_types: Box<(TomlValue, TomlValue)>,
     },
 }
 
@@ -317,7 +317,7 @@ impl TomlValue {
                 println!("value types are not the same: {:?}", err_other);
                 Err(NormalizationError::ValueMismatch {
                     path: vec![],
-                    value_types: (err_other.0.clone(), err_other.1.clone()),
+                    value_types: Box::new((err_other.0.clone(), err_other.1.clone())),
                 })
             }
         }

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use proc_macro2 as pm2;
 use proc_macro2::Span;
 use quote::quote;
+use syn::Ident;
 use toml::value::{Date, Datetime};
 
 use crate::custom_struct::ConstIdentDef;
@@ -151,6 +152,8 @@ impl From<toml::Table> for TomlValue {
 
 impl TomlValue {
     /// This method assumes that [TomlValue::normalize] is already called.
+    ///
+    /// This will recursively visit and normalize all items in a [toml::Value].
     pub fn normalize_toml(&self, toml: &mut toml::Value) {
         match (self, toml) {
             (TomlValue::String, toml::Value::String(_))
@@ -356,11 +359,9 @@ impl TomlValue {
         }
     }
 
-    /// Recursively define array and table types.
-    ///
-    /// `Self` should be normalized first.
-    #[allow(unused)]
-    fn definition(&self, key: &str) -> pm2::TokenStream {
+    /// Return the type of a value.
+    /// Arrays will descend and return their inner type.
+    fn ty(&self, key: &str, parent_mod: Option<&Ident>) -> pm2::TokenStream {
         match self {
             TomlValue::String => quote! {&'static str},
             TomlValue::Integer => quote! {i64},
@@ -368,10 +369,44 @@ impl TomlValue {
             TomlValue::Boolean => quote! {bool},
             TomlValue::Datetime { date, time, offset } => {
                 let dt_ident = date_time_struct_ident(*date, *time, *offset);
-                quote! {#dt_ident}
+                quote! { toml_const :: #dt_ident }
             }
+            TomlValue::Array(toml_values) => {
+                match toml_values.first() {
+                    Some(inner) => {
+                        let inner_type = inner.ty(key, parent_mod);
+
+                        quote! { &'static [#inner_type] }
+                    }
+                    // default to string array
+                    None => quote! { &'static [&'static str] },
+                }
+            }
+            TomlValue::Table(_) => {
+                let self_type = key.to_type_ident();
+
+                match parent_mod {
+                    Some(parent) => quote! { #parent :: #self_type },
+                    None => quote! { #self_type },
+                }
+            }
+        }
+    }
+
+    /// Recursively define array and table types.
+    ///
+    /// `Self` should be normalized first.
+    pub fn definition(&self, key: &str) -> pm2::TokenStream {
+        match self {
+            // do not need to define primitive/provided types
+            TomlValue::String
+            | TomlValue::Integer
+            | TomlValue::Float
+            | TomlValue::Boolean
+            | TomlValue::Datetime { .. } => quote! {},
+
             Self::Array(arr) => match arr.len() {
-                0 => todo!("handle case - empty array inferred to be bool arr"),
+                0 => quote! {}, // instantiated as bool array
                 1 => {
                     let inner_value = &arr[0];
 
@@ -383,33 +418,16 @@ impl TomlValue {
                 let self_ident = key.to_type_ident();
                 let self_mod = key.to_module_ident();
 
-                let mut x = 0;
+                // let mut x = 0;
 
                 let fields = tab
                     .iter()
                     .map(|(k, v)| {
-                        x += 1;
+                        // x += 1;
                         // let field_ident = k.to_variable_ident();
-                        let field_ident = syn::Ident::new(&k, Span::call_site());
+                        let field_ident = k.to_module_ident();
 
-                        let field_type = match v {
-                            TomlValue::String => quote! {&'static str},
-                            TomlValue::Integer => quote! {i64},
-                            TomlValue::Float => quote! {f64},
-                            TomlValue::Boolean => quote! {bool},
-                            TomlValue::Datetime { date, time, offset } => {
-                                let dt_ident = date_time_struct_ident(*date, *time, *offset);
-                                quote! {#dt_ident}
-                            }
-                            TomlValue::Array(_) => {
-                                let id = k.to_type_ident();
-                                quote! {&'static [#self_mod :: #id]}
-                            }
-                            TomlValue::Table(_) => {
-                                let id = k.to_type_ident();
-                                quote! {#self_mod :: #id}
-                            }
-                        };
+                        let field_type = v.ty(k, Some(&self_mod));
 
                         quote! {
                             pub #field_ident: #field_type,
@@ -493,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_parse_toml_toml_value() {
-        const NORMALIZE_FILE: &str = include_str!("../../normalize.toml");
+        const NORMALIZE_FILE: &str = include_str!("../Cargo.toml");
 
         let parsed = toml::Table::from_str(NORMALIZE_FILE).expect("must parse");
         let toml_val = TomlValue::from(parsed.clone());

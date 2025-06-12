@@ -13,7 +13,7 @@ use parse::{MacroInput, MultipleMacroInput};
 use quote::{quote, ToTokens};
 use syn::parse_macro_input;
 
-use crate::normalize::TomlValue;
+use crate::{custom_struct::ConstIdentDef, normalize::TomlValue};
 
 /// Instantiate a const definition of the contents from a TOML file.
 ///
@@ -156,16 +156,15 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         .as_table()
         .expect("conversion back to table must not fail");
 
-    let table_definitions = def_inner_tables(
-        &toml_table,
-        &Key::Var(&input.item_ident),
-        input.destructure_datetime,
-    );
-    let instantiation = toml_table.instantiate(
-        Key::Var(&input.item_ident),
-        vec![],
-        input.destructure_datetime,
-    );
+    // let table_definitions = def_inner_tables(
+    //     &toml_table,
+    //     &Key::Var(&input.item_ident),
+    //     input.destructure_datetime,
+    // );
+
+    let table_definitions = toml_val_table.definition(&input.item_ident.to_string());
+
+    let instantiation = toml_table.instantiate(&input.item_ident.to_string(), vec![]);
 
     let pub_token = if input.is_pub {
         quote! {pub}
@@ -178,6 +177,9 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         false => quote! {static},
     };
 
+    let item_ident = &input.item_ident;
+    let item_ty = input.item_ident.to_string().to_type_ident();
+
     let doc_attrs = input
         .doc_attrs()
         .into_iter()
@@ -188,7 +190,7 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
         #table_definitions
 
         #doc_attrs
-        #pub_token #static_const_token #instantiation
+        #pub_token #static_const_token #item_ident: #item_ty = #instantiation;
     }
     .into()
 }

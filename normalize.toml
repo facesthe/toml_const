@@ -1,0 +1,55 @@
+# Test normalization logic
+
+this = 2
+that = "asdasdads"
+how = 2024-10-10
+num = 1.73205080756887729352744
+cond = true
+matrix = [[{ name = "value" }], []]
+
+[inner_table]
+name = "Inner Table"
+value = 42
+empty = []
+
+[[items]]
+name = "Laptop"
+price = 1000.00
+# as all variants of datetimes are used, the union format is offset date time
+purchase_date = 2023-10-10
+
+[[items]]
+name = "Tablet"
+purchase_date = 12:00:00
+versions = [
+    { version = "1.0", mass = 0.5, applications = [
+        { name = "App1", version = "1.0", stuff = false },
+        { name = "App2", version = "2.0" },
+    ], storage = [
+        { variant = "SSD", size = 256 },
+        { variant = "HDD", size = 1024 },
+    ] },
+]
+
+[[items]]
+name = "Smartwatch"
+purchase_date = 2023-10-11T14:30:00Z
+versions = [
+    { version = "1.0", mass = 0.2, applications = [
+        { name = "App1", version = "1.0" },
+        { name = "App2", version = "2.0" },
+    ] },
+]
+
+[[items]]
+name = "Smartphone"
+purchase_date = 2023-10-12T09:00:00+02:00
+versions = [
+    { version = "1.0", mass = 0.3, applications = [
+        { name = "App1", version = "1.0" },
+        { name = "App2", version = "2.0" },
+    ], storage = [
+        { variant = "SSD", size = 128 },
+        { variant = "HDD", size = 512, archive = false },
+    ] },
+]

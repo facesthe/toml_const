@@ -15,6 +15,9 @@ pub struct MultipleMacroInput(pub Vec<MacroInput>);
 /// Input to [toml_const!](crate::toml_const)
 #[derive(Clone)]
 pub struct MacroInput {
+    pub attrs: Vec<syn::Attribute>,
+
+    // pub destructure_datetime: bool,
     /// Whether the static variable is public
     pub is_pub: bool,
 
@@ -23,6 +26,9 @@ pub struct MacroInput {
 
     /// Static item identifier
     pub item_ident: Ident,
+
+    /// `final` marks if the input file can be substituted
+    pub is_final: bool,
 
     /// Path to the template file, mandatory
     pub path: LitStr,
@@ -53,6 +59,9 @@ impl Parse for MultipleMacroInput {
 
 impl Parse for MacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // parse docstring and datetime attr
+        let attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
+
         let is_pub: bool = {
             let lookahead = input.lookahead1();
             match lookahead.peek(syn::Token![pub]) {
@@ -83,9 +92,22 @@ impl Parse for MacroInput {
 
         let item_ident: syn::Ident = input.parse()?;
         let _: syn::Token![:] = input.parse()?;
-        let template: LitStr = input.parse()?;
-        let lookahead = input.lookahead1();
 
+        let is_final = {
+            let lookahead = input.lookahead1();
+
+            match lookahead.peek(syn::Token![final]) {
+                true => {
+                    let _: syn::Token![final] = input.parse()?;
+                    true
+                }
+                false => false,
+            }
+        };
+
+        let template: LitStr = input.parse()?;
+
+        let lookahead = input.lookahead1();
         let sub_paths = match lookahead.peek(syn::Token![;]) {
             true => {
                 let _: syn::Token![;] = input.parse()?;
@@ -106,18 +128,30 @@ impl Parse for MacroInput {
             },
         };
 
-        Ok(Self {
-            is_pub,
-            static_const,
-            item_ident,
-            path: template,
-            sub_paths,
-        })
+        match is_final && sub_paths.is_some() {
+            true => Err(syn::Error::new(
+                template.span(),
+                "final inputs cannot accept substitutions",
+            )),
+            false => Ok(Self {
+                attrs,
+                is_pub,
+                static_const,
+                item_ident,
+                is_final,
+                path: template,
+                sub_paths,
+            }),
+        }
     }
 }
 
 impl ToTokens for MacroInput {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
+
         if self.is_pub {
             quote! {pub}.to_tokens(tokens);
         }
@@ -129,6 +163,11 @@ impl ToTokens for MacroInput {
 
         self.item_ident.to_tokens(tokens);
         quote! {:}.to_tokens(tokens);
+
+        if self.is_final {
+            quote! {final}.to_tokens(tokens);
+        }
+
         self.path.to_tokens(tokens);
 
         match &self.sub_paths {
@@ -280,8 +319,7 @@ impl MacroInput {
                         }
                         // toml-level override
                         (false, true) => {
-                            let (_, use_val) =
-                                sub_toml.get_key_value("use").expect("already checked");
+                            let use_val = sub_toml.get("use").expect("already checked");
                             if let toml::Value::Boolean(true) = use_val {
                                 res_sub = Some(sub_toml);
                                 break;
@@ -303,29 +341,81 @@ impl MacroInput {
 
         Ok(merged)
     }
+
+    pub fn doc_attrs(&self) -> Vec<&syn::Attribute> {
+        self.attrs
+            .iter()
+            .filter(|a| match a.meta.require_name_value() {
+                Ok(nv) => nv.path.is_ident("doc"),
+                Err(_) => false,
+            })
+            .collect()
+    }
 }
 
 /// Merge a toml template with a changes table. Changes will set/overwrite values in the template.
+/// If both values are tables, merge recursively. If both are arrays, merge arrays element-wise.
+/// Otherwise, the value from `changes` overrides the value from `template`.
 fn merge_tables(template: &toml::Table, changes: &toml::Table) -> toml::Table {
     let mut merged_table = template.clone();
 
     for (key, value) in changes.iter() {
-        if let Some(existing_value) = merged_table.get_mut(key) {
-            if let Some(existing_table) = existing_value.as_table_mut() {
-                if let Some(changes_table) = value.as_table() {
-                    // Recursively merge the tables
-                    let merged_subtable = merge_tables(existing_table, changes_table);
-                    *existing_value = toml::Value::Table(merged_subtable);
-                    continue;
+        match (merged_table.get(key), value) {
+            (Some(toml::Value::Table(orig)), toml::Value::Table(chg)) => {
+                merged_table.insert(key.clone(), toml::Value::Table(merge_tables(orig, chg)));
+            }
+            (Some(toml::Value::Array(orig)), toml::Value::Array(chg)) => {
+                let mut merged_array = orig.clone();
+                let min_len = merged_array.len().min(chg.len());
+                // Overwrite elements in orig with those in chg, element-wise
+                for i in 0..min_len {
+                    merged_array[i] = match (&merged_array[i], &chg[i]) {
+                        (toml::Value::Table(orig_t), toml::Value::Table(chg_t)) => {
+                            toml::Value::Table(merge_tables(orig_t, chg_t))
+                        }
+                        (toml::Value::Array(orig_a), toml::Value::Array(chg_a)) => {
+                            // Recursively merge arrays
+                            let merged = merge_arrays(orig_a, chg_a);
+                            toml::Value::Array(merged)
+                        }
+                        (_, chg_v) => chg_v.clone(),
+                    };
                 }
+                // If chg is longer, append the extra elements
+                if chg.len() > merged_array.len() {
+                    merged_array.extend_from_slice(&chg[merged_array.len()..]);
+                }
+                merged_table.insert(key.clone(), toml::Value::Array(merged_array));
+            }
+            // Otherwise, just override
+            _ => {
+                merged_table.insert(key.clone(), value.clone());
             }
         }
-
-        // Update the value directly if it doesn't exist in the template or cannot be merged
-        merged_table.insert(key.clone(), value.clone());
     }
 
     merged_table
+}
+
+/// Merge two TOML arrays element-wise, recursively merging tables/arrays, otherwise replacing.
+fn merge_arrays(orig: &[toml::Value], chg: &[toml::Value]) -> Vec<toml::Value> {
+    let mut merged = orig.to_vec();
+    let min_len = orig.len().min(chg.len());
+    for i in 0..min_len {
+        merged[i] = match (&orig[i], &chg[i]) {
+            (toml::Value::Table(orig_t), toml::Value::Table(chg_t)) => {
+                toml::Value::Table(merge_tables(orig_t, chg_t))
+            }
+            (toml::Value::Array(orig_a), toml::Value::Array(chg_a)) => {
+                toml::Value::Array(merge_arrays(orig_a, chg_a))
+            }
+            (_, chg_v) => chg_v.clone(),
+        };
+    }
+    if chg.len() > orig.len() {
+        merged.extend_from_slice(&chg[orig.len()..]);
+    }
+    merged
 }
 
 fn pathbuf_to_str(input: &Path) -> &str {
@@ -411,6 +501,16 @@ mod tests {
             use "some_sub_file_path.toml";
             "some_other_sub_file_path.toml";
         }
+    });
+
+    test_parse!(MacroInput: test_parse_template_final {
+        pub const X: final "some_file_path.toml";
+    });
+
+    test_parse!(MacroInput: test_parse_template_with_attributes {
+        /// Docstring = #[doc = "Docstring"]
+        /// Another docstring line
+        pub const X: final "some_file_path.toml";
     });
 
     test_parse!(UsePath: test_parse_use_path_used {

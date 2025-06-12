@@ -28,6 +28,8 @@ use toml_const::{toml_const, toml_const_ws};
 
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
+    /// Docstring for this item
+    #[derive(PartialEq, PartialOrd)] // Clone, Copy, Debug are already derived
     pub const EXAMPLE_TOML: "../example.toml";
     // multiple definitions are supported
     static CARGO_TOML: "Cargo.toml";
@@ -37,8 +39,8 @@ toml_const! {
 toml_const_ws! {static EXAMPLE_TOML_WS: "example.toml";}
 
 // table keys are capitalized struct fields
-const TITLE: &str = EXAMPLE_TOML.TITLE;
-assert_eq!(EXAMPLE_TOML.TITLE, EXAMPLE_TOML_WS.TITLE);
+const TITLE: &str = EXAMPLE_TOML.title;
+assert_eq!(EXAMPLE_TOML.title, EXAMPLE_TOML_WS.title);
 ```
 
 ## Table substitution
@@ -73,13 +75,75 @@ toml_const! {
 }
 ```
 
+## Normalization
+
+A TOML file is normalized before it is generated as code. This step does not modify the original config file.
+
+Tables within arrays will have their keys propagated across all elements. Missing keys will be filled with default values.
+This means that keys can be omitted from parts of your config as long as it is defined in at least one element.
+
+Empty arrays will be inferred to be `&'static [&'static str]`.
+
+```toml
+# this table will normalize to ...
+[program]
+name = "my_library"
+versions = [
+    { version = "0.1.0", description = "Initial release" },
+    { version = "0.2.0" }, # description is omitted
+    { version = "0.3.0", description = "Added support for arrays of tables", bug_fixes = [
+        { issue = "1", description = "Fixed a bug with arrays of tables" },
+        { issue = "2", description = "support nested arrays" },
+    ] },
+]
+
+# ... this
+[program]
+name = "my_library"
+versions = [
+    { version = "0.1.0", description = "Initial release", bug_fixes = [] },
+    { version = "0.2.0", description = "", bug_fixes = [] },
+    { version = "0.3.0", description = "Added support for arrays of tables", bug_fixes = [
+        { issue = "1", description = "Fixed a bug with arrays of tables" },
+        { issue = "2", description = "support nested arrays" },
+    ] },
+]
+```
+
+## Unwrapping datetime
+
+`toml::Datetime` contains fields that point to `Option`s, which need const/runtime checks.
+As the toml spec defines [4 datetime formats](https://docs.rs/toml/latest/toml/value/struct.Datetime.html),
+non-option types can be used to unwrap datetime values at compile time.
+
+Datetime values are also normalized to support multiple formats defined for one key.
+The union of all formats will be used to generate the final datetime format.
+
+## Attributes
+
+Docstrings and derive attributes are supported.
+`Clone`, `Copy`, and `Debug` are automatically derived for all types.
+
+```rust
+use toml_const::toml_const;
+
+toml_const! {
+    /// # Cargo manifest file
+    ///
+    /// This file contains
+    /// - something
+    #[derive(PartialEq, Hash)]
+    pub const CARGO_TOML: "Cargo.toml";
+}
+```
+
 ## Limitations
 
 This library does not support the full TOML specification.
 
 It **will fail to**:
 
-- generate arrays with distinct types (arrays containing different types, arrays of tables with different keys)
+- generate arrays with distinct types (arrays containing different types, arrays of tables with conflicting key types)
 - create a struct from a table with a blank key `"" = true`
 
 It **will modify**:
@@ -97,6 +161,6 @@ All TOML data types are supported. Datetime related structs are re-exported from
 | integer | `i64` |
 | float | `f64` |
 | string | `&'static str` |
-| date | `toml::value::Datetime` |
-| array | `toml_const::Array<T>` |
+| date | `toml_const::Datetime` |
+| array | `&'static [T]` |
 | table | auto-generated struct |

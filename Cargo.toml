@@ -7,3 +7,6 @@ edition = "2021"
 # remember to update macro version depended on in toml_const/Cargo.toml
 version = "1.0.1"
 rust-version = "1.56"
+
+[workspace.dependencies]
+toml = "0.8"

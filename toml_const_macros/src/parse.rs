@@ -6,12 +6,8 @@ use std::path::{Path, PathBuf};
 use proc_macro2 as pm2;
 use proc_macro2::{Delimiter, Group};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::spanned::Spanned;
 use syn::Ident;
 use syn::{braced, parse::Parse, punctuated::Punctuated, LitStr};
-
-/// Attribute for converting all datetime values to their unwrapped equivalents.
-const UNWRAP_DATETIME: &str = "unwrap_datetime";
 
 #[derive(Clone)]
 pub struct MultipleMacroInput(pub Vec<MacroInput>);
@@ -21,8 +17,7 @@ pub struct MultipleMacroInput(pub Vec<MacroInput>);
 pub struct MacroInput {
     pub attrs: Vec<syn::Attribute>,
 
-    pub destructure_datetime: bool,
-
+    // pub destructure_datetime: bool,
     /// Whether the static variable is public
     pub is_pub: bool,
 
@@ -66,32 +61,6 @@ impl Parse for MacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         // parse docstring and datetime attr
         let attrs = input.call(syn::Attribute::parse_outer).unwrap_or_default();
-
-        let destructure_datetime = attrs.iter().any(|a| match a.meta.require_path_only() {
-            Ok(path) => path.is_ident(UNWRAP_DATETIME),
-            Err(_) => false,
-        });
-
-        for attr in attrs.iter() {
-            match &attr.meta {
-                syn::Meta::Path(path) => match path.is_ident(UNWRAP_DATETIME) {
-                    true => (),
-                    false => {
-                        return Err(syn::Error::new(
-                            path.span(),
-                            format!("unknown attribute, expected `#[{}]`", UNWRAP_DATETIME),
-                        ))
-                    }
-                },
-                syn::Meta::List(ml) => {
-                    return Err(syn::Error::new(
-                        ml.span(),
-                        "metalist attributes are not allowed",
-                    ))
-                }
-                syn::Meta::NameValue(_) => (),
-            }
-        }
 
         let is_pub: bool = {
             let lookahead = input.lookahead1();
@@ -166,7 +135,6 @@ impl Parse for MacroInput {
             )),
             false => Ok(Self {
                 attrs,
-                destructure_datetime,
                 is_pub,
                 static_const,
                 item_ident,
@@ -386,26 +354,68 @@ impl MacroInput {
 }
 
 /// Merge a toml template with a changes table. Changes will set/overwrite values in the template.
+/// If both values are tables, merge recursively. If both are arrays, merge arrays element-wise.
+/// Otherwise, the value from `changes` overrides the value from `template`.
 fn merge_tables(template: &toml::Table, changes: &toml::Table) -> toml::Table {
     let mut merged_table = template.clone();
 
     for (key, value) in changes.iter() {
-        if let Some(existing_value) = merged_table.get_mut(key) {
-            if let Some(existing_table) = existing_value.as_table_mut() {
-                if let Some(changes_table) = value.as_table() {
-                    // Recursively merge the tables
-                    let merged_subtable = merge_tables(existing_table, changes_table);
-                    *existing_value = toml::Value::Table(merged_subtable);
-                    continue;
+        match (merged_table.get(key), value) {
+            (Some(toml::Value::Table(orig)), toml::Value::Table(chg)) => {
+                merged_table.insert(key.clone(), toml::Value::Table(merge_tables(orig, chg)));
+            }
+            (Some(toml::Value::Array(orig)), toml::Value::Array(chg)) => {
+                let mut merged_array = orig.clone();
+                let min_len = merged_array.len().min(chg.len());
+                // Overwrite elements in orig with those in chg, element-wise
+                for i in 0..min_len {
+                    merged_array[i] = match (&merged_array[i], &chg[i]) {
+                        (toml::Value::Table(orig_t), toml::Value::Table(chg_t)) => {
+                            toml::Value::Table(merge_tables(orig_t, chg_t))
+                        }
+                        (toml::Value::Array(orig_a), toml::Value::Array(chg_a)) => {
+                            // Recursively merge arrays
+                            let merged = merge_arrays(orig_a, chg_a);
+                            toml::Value::Array(merged)
+                        }
+                        (_, chg_v) => chg_v.clone(),
+                    };
                 }
+                // If chg is longer, append the extra elements
+                if chg.len() > merged_array.len() {
+                    merged_array.extend_from_slice(&chg[merged_array.len()..]);
+                }
+                merged_table.insert(key.clone(), toml::Value::Array(merged_array));
+            }
+            // Otherwise, just override
+            _ => {
+                merged_table.insert(key.clone(), value.clone());
             }
         }
-
-        // Update the value directly if it doesn't exist in the template or cannot be merged
-        merged_table.insert(key.clone(), value.clone());
     }
 
     merged_table
+}
+
+/// Merge two TOML arrays element-wise, recursively merging tables/arrays, otherwise replacing.
+fn merge_arrays(orig: &[toml::Value], chg: &[toml::Value]) -> Vec<toml::Value> {
+    let mut merged = orig.to_vec();
+    let min_len = orig.len().min(chg.len());
+    for i in 0..min_len {
+        merged[i] = match (&orig[i], &chg[i]) {
+            (toml::Value::Table(orig_t), toml::Value::Table(chg_t)) => {
+                toml::Value::Table(merge_tables(orig_t, chg_t))
+            }
+            (toml::Value::Array(orig_a), toml::Value::Array(chg_a)) => {
+                toml::Value::Array(merge_arrays(orig_a, chg_a))
+            }
+            (_, chg_v) => chg_v.clone(),
+        };
+    }
+    if chg.len() > orig.len() {
+        merged.extend_from_slice(&chg[orig.len()..]);
+    }
+    merged
 }
 
 fn pathbuf_to_str(input: &Path) -> &str {
@@ -500,7 +510,6 @@ mod tests {
     test_parse!(MacroInput: test_parse_template_with_attributes {
         /// Docstring = #[doc = "Docstring"]
         /// Another docstring line
-        #[unwrap_datetime]
         pub const X: final "some_file_path.toml";
     });
 

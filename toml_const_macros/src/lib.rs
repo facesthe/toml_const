@@ -1,11 +1,11 @@
 mod check;
-mod custom_struct;
+mod instantiate;
 mod normalize;
 mod parse;
 
 use std::path::PathBuf;
 
-use custom_struct::Instantiate;
+use instantiate::Instantiate;
 use proc_macro as pm;
 use proc_macro2::{self as pm2, Span};
 
@@ -13,7 +13,7 @@ use parse::{MacroInput, MultipleMacroInput};
 use quote::{quote, ToTokens};
 use syn::parse_macro_input;
 
-use crate::{custom_struct::ConstIdentDef, normalize::TomlValue};
+use crate::{instantiate::ConstIdentDef, normalize::TomlValue};
 
 /// Instantiate a const definition of the contents from a TOML file.
 ///

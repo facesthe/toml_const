@@ -20,7 +20,7 @@ use quote::quote;
 use syn::Ident;
 use toml::value::{Date, Datetime};
 
-use crate::custom_struct::ConstIdentDef;
+use crate::instantiate::ConstIdentDef;
 
 const DEFAULT_DATE: Date = Date {
     year: 1970,

@@ -1,4 +1,4 @@
-//! Custom struct generation crate.
+//! Struct instantiation crate.
 //!
 //! A toml table is converted to a custom struct.
 //! The identifier of the struct is used as the struct's type.

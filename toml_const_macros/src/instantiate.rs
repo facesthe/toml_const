@@ -10,19 +10,6 @@ use syn::{punctuated::Punctuated, Ident};
 /// Chars to replace when converting to an identifier.
 const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
 
-// /// Generate the struct definition for arbitrary [toml::Table]s.
-// ///
-// /// This trait mainly applies to toml tables.
-// /// Field names remain as SCREAMING_SNAKE_CASE, as they point to static items.
-// pub trait TableTypeDef {
-//     fn table_type_def(&self, key: &Key<'_>, unwrap: bool) -> pm2::TokenStream;
-// }
-
-// /// Return the type of the value.
-// pub trait ValueType {
-//     fn value_type(&self, key: &str, parent_ident: &Ident, unwrap: bool) -> pm2::TokenStream;
-// }
-
 /// Generate the instantiation of an item. This can be a custom struct or a simple value.
 /// If a key is provided, the instantiation will be in a field-value pair.
 ///
@@ -42,7 +29,7 @@ pub trait ConstIdentDef {
 
     /// Create a valid module identifier, formatted as snake_case.
     fn to_module_ident(&self) -> syn::Ident {
-        syn::Ident::new(
+        syn::Ident::new_raw(
             &self.to_variable_ident().to_string().to_lowercase(),
             Span::call_site(),
         )

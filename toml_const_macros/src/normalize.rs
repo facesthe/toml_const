@@ -313,13 +313,10 @@ impl TomlValue {
                 Ok(TomlValue::Table(merged))
             }
 
-            err_other => {
-                println!("value types are not the same: {:?}", err_other);
-                Err(NormalizationError::ValueMismatch {
-                    path: vec![],
-                    value_types: Box::new((err_other.0.clone(), err_other.1.clone())),
-                })
-            }
+            err_other => Err(NormalizationError::ValueMismatch {
+                path: vec![],
+                value_types: Box::new((err_other.0.clone(), err_other.1.clone())),
+            }),
         }
     }
 
@@ -506,14 +503,6 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn test_toml_value_default() {
-        let default_int = toml::Value::Integer(Default::default());
-        println!("{}", default_int);
-
-        // let default_dt = toml::value::Date::default();
-    }
-
-    #[test]
     fn test_parse_toml_toml_value() {
         const NORMALIZE_FILE: &str = include_str!("../Cargo.toml");
 
@@ -538,5 +527,70 @@ mod tests {
             "definition: {}",
             normalized.definition("TOP_LEVEL_TABLE", &[])
         );
+    }
+
+    #[test]
+    fn test_normalize_error_value_mismatch() {
+        let toml = r#"
+        [[array]]
+        key1 = "value1"
+        key2 = 42
+
+        [[array]]
+        key1 = "value2"
+        key2 = "invalid value"
+        "#;
+
+        let parsed = toml::Table::from_str(toml).expect("must parse");
+        let toml_val = TomlValue::from(parsed.clone());
+        match toml_val.normalize() {
+            Ok(n) => {
+                panic!("Normalization should have failed, but succeeded: {:#?}", n);
+            }
+            Err(e) => match e {
+                NormalizationError::ValueMismatch { path, value_types } => {
+                    assert!(path == ["key2".to_string(), "array".to_string()]);
+                    assert!(matches!(value_types.0, TomlValue::Integer));
+                    assert!(matches!(value_types.1, TomlValue::String));
+                }
+            },
+        };
+
+        let toml = r#"
+        [[array]]
+        [[array.table]]
+        key2 = "false"
+        key1 = "value1"
+        [[array.table.inner]]
+        item = "name"
+
+        [[array]]
+        [[array.table]]
+        key1 = "value1"
+        [[array.table.inner]]
+        item = false
+        "#;
+
+        let parsed = toml::Table::from_str(toml).expect("must parse");
+        let toml_val = TomlValue::from(parsed.clone());
+        match toml_val.normalize() {
+            Ok(n) => {
+                panic!("Normalization should have failed, but succeeded: {:#?}", n);
+            }
+            Err(e) => match e {
+                NormalizationError::ValueMismatch { path, value_types } => {
+                    assert!(
+                        path == [
+                            "item".to_string(),
+                            "inner".to_string(),
+                            "table".to_string(),
+                            "array".to_string()
+                        ]
+                    );
+                    assert!(matches!(value_types.0, TomlValue::String));
+                    assert!(matches!(value_types.1, TomlValue::Boolean));
+                }
+            },
+        };
     }
 }

@@ -549,7 +549,7 @@ mod tests {
             }
             Err(e) => match e {
                 NormalizationError::ValueMismatch { path, value_types } => {
-                    assert!(&path == &["key2".to_string(), "array".to_string()]);
+                    assert!(path == ["key2".to_string(), "array".to_string()]);
                     assert!(matches!(value_types.0, TomlValue::Integer));
                     assert!(matches!(value_types.1, TomlValue::String));
                 }
@@ -580,13 +580,12 @@ mod tests {
             Err(e) => match e {
                 NormalizationError::ValueMismatch { path, value_types } => {
                     assert!(
-                        &path
-                            == &[
-                                "item".to_string(),
-                                "inner".to_string(),
-                                "table".to_string(),
-                                "array".to_string()
-                            ]
+                        path == [
+                            "item".to_string(),
+                            "inner".to_string(),
+                            "table".to_string(),
+                            "array".to_string()
+                        ]
                     );
                     assert!(matches!(value_types.0, TomlValue::String));
                     assert!(matches!(value_types.1, TomlValue::Boolean));

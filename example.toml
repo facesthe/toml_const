@@ -1,5 +1,17 @@
 # Example TOML file with all supported data types
 
+# most keywords can be used as keys
+use = true
+mod = "reserved keyword as key"
+pub = "reserved keyword as key"
+unsafe = true
+fn = "reserved keyword as key"
+extern = "reserved keyword as key"
+
+# self = "kw in path segments will not work"
+# super = "kw in path segments will not work"
+
+
 # String
 title = "TOML Example"
 
@@ -123,7 +135,7 @@ something = { this = "false", that = true }
 # this_value = 100
 
 [[win.an_array]]
-value = 0
+value = 10
 something = { this = "false", that = false }
 
 [[win.an_array]]

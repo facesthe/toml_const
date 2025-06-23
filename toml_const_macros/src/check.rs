@@ -5,6 +5,8 @@ use std::collections::HashSet;
 // use proc_macro::Span;
 use proc_macro2::{self as pm2, Span};
 
+use crate::MAP_FIELD;
+
 /// Various ways checks can be mismatched
 #[derive(Clone, Debug)]
 pub enum CheckError {
@@ -83,6 +85,14 @@ pub fn check_unauthorized_keys(input: &toml::Table) -> Result<(), pm2::TokenStre
                 syn::Error::new(Span::call_site(), "empty quoted keys cannot be used")
                     .to_compile_error(),
             );
+        }
+
+        if key == MAP_FIELD {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                format!("\"{MAP_FIELD}\" is a reserved key"),
+            )
+            .to_compile_error());
         }
 
         match value {

@@ -21,7 +21,7 @@ toml_const::toml_const! {
 
 fn asd() {
     let x = NORMALIZE_TOML.tables.b.map();
-    let b = NORMALIZE_TOML.tables.b.__map__;
+    let b = NORMALIZE_TOML.tables.b;
 }
 
 // #[cfg(test)]

@@ -184,16 +184,13 @@ impl Instantiate for toml::Table {
         let mut parents = parents.clone();
         parents.push(&table_mod);
 
-        let fields = match toml_value {
+        let new_params = match toml_value {
             TomlValue::Table(tab) => self
                 .iter()
                 .map(|(f_key, f_val)| {
                     let inner_val = tab.get(f_key).expect("key should exist in table");
 
-                    let value = f_val.instantiate(f_key, inner_val, parents.clone());
-                    let key = f_key.to_module_ident();
-
-                    quote! { #key : #value}
+                    f_val.instantiate(f_key, inner_val, parents.clone())
                 })
                 .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>(),
             TomlValue::TableMap {
@@ -213,33 +210,25 @@ impl Instantiate for toml::Table {
                     })
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
-                let map_field = MAP_FIELD.to_module_ident();
-
-                let map_field_value = quote! {
-                    #map_field: {use toml_const::phf; &toml_const::phf_map_macro! {
+                let map_value = quote! {{
+                    use toml_const::phf;
+                    &toml_const::phf_map_macro! {
                         #map_vals
-                    }}
-                };
+                    }
+                }};
 
                 self.iter()
-                    .map(|(f_key, f_val)| {
-                        // let inner_val = tab.get(f_key).expect("key should exist in table");
-
-                        let value = f_val.instantiate(first, &value_type, parents.clone());
-                        let key = f_key.to_module_ident();
-
-                        quote! { #key : #value}
-                    })
-                    .chain([map_field_value].into_iter())
+                    .map(|(_, f_val)| f_val.instantiate(first, &value_type, parents.clone()))
+                    .chain([map_value].into_iter())
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>()
             }
             _ => unimplemented!("expected a table or table map"),
         };
 
         quote! {
-            #table_ty {
-                #fields
-            }
+            #table_ty::new(
+                #new_params
+            )
         }
     }
 }
@@ -368,88 +357,6 @@ impl Instantiate for toml::value::Offset {
         }
     }
 }
-
-// impl DefMap for toml::Value {
-//     fn define_map(
-//         &self,
-//         key: &str,
-//         parents: Vec<&Ident>,
-//         value: &TomlValue,
-//     ) -> proc_macro2::TokenStream {
-//         match self {
-//             toml::Value::String(_)
-//             | toml::Value::Integer(_)
-//             | toml::Value::Float(_)
-//             | toml::Value::Boolean(_)
-//             | toml::Value::Datetime(_)
-//             | toml::Value::Array(_) => quote! {},
-//             // only top-level tablescan be defined
-//             toml::Value::Table(map) => map.define_map(key, parents, value),
-//         }
-//     }
-// }
-
-// impl DefMap for toml::Table {
-//     fn define_map(
-//         &self,
-//         key: &str,
-//         parents: Vec<&Ident>,
-//         value: &TomlValue,
-//     ) -> proc_macro2::TokenStream {
-//         let table_value = if let TomlValue::Table(t) = value {
-//             t
-//         } else {
-//             return syn::Error::new(Span::call_site(), "expected a table")
-//                 .to_compile_error()
-//                 .to_token_stream();
-//         };
-
-//         if table_value.len() == 0 {
-//             return quote! {};
-//         }
-
-//         let mut values = table_value.values();
-//         let first = values.next().expect("already checked");
-
-//         if !values.all(|v| v == first) {
-//             return quote! {};
-//         }
-
-//         let phf_fields = self
-//             .iter()
-//             .map(|(k, v)| {
-//                 let key_lit = syn::LitStr::new(&k, Span::call_site());
-//                 let val = v.instantiate(key, toml_value: &parents.clone());
-
-//                 quote! {
-//                     #key_lit => #val
-//                 }
-//             })
-//             .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
-
-//         let self_type = key.to_type_ident();
-
-//         let self_type_path = match parents.len() {
-//             0 => quote! { #self_type },
-//             _ => {
-//                 let parent_path = parents
-//                     .iter()
-//                     .map(|p| p.to_token_stream())
-//                     .collect::<Punctuated<pm2::TokenStream, syn::Token![::]>>();
-
-//                 quote! { #parent_path :: #self_type }
-//             }
-//         };
-
-//         let map_value_type = table_value.values().next().expect("already checked");
-
-//         quote! {
-//             impl #self_type_path {
-//                 pub const fn table(&self) -> phf::Map<&'static str, >
-//             }
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

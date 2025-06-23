@@ -18,7 +18,7 @@ use indexmap::IndexMap;
 use proc_macro2 as pm2;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{Ident, TraitBoundModifier};
+use syn::{punctuated::Punctuated, Ident, TraitBoundModifier};
 use toml::value::{Date, Datetime};
 
 use crate::{instantiate::ConstIdentDef, MultipleMacroInput, MAP_FIELD};
@@ -513,7 +513,7 @@ impl TomlValue {
 
                 // let mut x = 0;
 
-                let fields = tab
+                let constructor_fields = tab
                     .iter()
                     .map(|(k, v)| {
                         // x += 1;
@@ -523,10 +523,17 @@ impl TomlValue {
                         let field_type = v.ty(k, Some(&self_mod));
 
                         quote! {
-                            pub #field_ident: #field_type,
+                            #field_ident: #field_type
                         }
                     })
-                    .collect::<pm2::TokenStream>();
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+
+                let struct_fields = constructor_fields
+                    .iter()
+                    .map(|k| {
+                        quote! {pub #k}
+                    })
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
                 let inner_definitions = tab
                     .iter()
@@ -539,17 +546,32 @@ impl TomlValue {
                     .map(|(k, v)| v.definition(k, derive_attrs))
                     .collect::<pm2::TokenStream>();
 
+                let shorthand_init_fields = tab
+                    .iter()
+                    .map(|(k, _)| k.to_module_ident().to_token_stream())
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+
                 let derives = derive_attrs
                     .iter()
                     .map(|attr| quote! { #attr })
                     .collect::<pm2::TokenStream>();
 
                 quote! {
-                    // table definition
                     // #[derive(Clone, Copy, Debug)]
                     // #derives
                     pub struct #self_ident {
-                        #fields
+                        #struct_fields
+                    }
+
+                    impl #self_ident {
+                        #[doc(hidden)]
+                        pub const fn new(
+                            #constructor_fields
+                        ) -> Self {
+                            Self {
+                                #shorthand_init_fields
+                            }
+                        }
                     }
 
                     pub mod #self_mod {
@@ -571,25 +593,42 @@ impl TomlValue {
 
                 // final map field type
                 let map_field = quote! {
-                    #[automatically_derived]
-                    pub #map_field_ident: &'static #phf_map_type,
+                    #map_field_ident: &'static #phf_map_type
                 };
 
-                let fields = keys
+                let constructor_fields = keys
                     .iter()
                     .map(|k| {
                         let field_ident = k.to_module_ident();
                         quote! {
-                            pub #field_ident: #all_field_type,
+                            #field_ident: #all_field_type
                         }
                     })
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+
+                let struct_fields = constructor_fields
+                    .iter()
+                    .map(|k| {
+                        quote! {pub #k}
+                    })
+                    .chain([map_field.clone()].into_iter())
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+
+                let constructor_fields = constructor_fields
+                    .into_iter()
                     .chain([map_field].into_iter())
-                    .collect::<pm2::TokenStream>();
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
                 let derives = derive_attrs
                     .iter()
                     .map(|attr| quote! { #attr })
                     .collect::<pm2::TokenStream>();
+
+                let shorthand_init_fields = keys
+                    .iter()
+                    .map(|k| k.to_module_ident().to_token_stream())
+                    .chain([map_field_ident.to_token_stream()].into_iter())
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
                 let inner_definitions = value_type.definition(&first, derive_attrs);
 
@@ -597,10 +636,19 @@ impl TomlValue {
                     // #[derive(Clone, Copy, Debug)]
                     // #derives
                     pub struct #self_ident {
-                        #fields
+                        #struct_fields
                     }
 
                     impl #self_ident {
+                        #[doc(hidden)]
+                        pub const fn new(
+                            #constructor_fields
+                        ) -> Self {
+                            Self {
+                                #shorthand_init_fields
+                            }
+                        }
+
                         pub const fn map(&'static self) -> &'static #phf_map_type {
                             &self.#map_field_ident
                         }

@@ -29,7 +29,7 @@ use toml_const::{toml_const, toml_const_ws};
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
     /// Docstring for this item
-    #[derive(PartialEq, PartialOrd)] // Clone, Copy, Debug are already derived
+    #[derive(PartialEq)] // Clone, Copy, Debug are already derived
     pub const EXAMPLE_TOML: "../example.toml";
     // multiple definitions are supported
     static CARGO_TOML: "Cargo.toml";
@@ -132,7 +132,7 @@ toml_const! {
     ///
     /// This file contains
     /// - something
-    #[derive(PartialEq, Hash)]
+    #[derive(PartialEq)]
     pub const CARGO_TOML: "Cargo.toml";
 }
 ```

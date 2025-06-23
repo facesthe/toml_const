@@ -15,6 +15,7 @@ use syn::parse_macro_input;
 
 use crate::{instantiate::ConstIdentDef, normalize::TomlValue};
 
+/// Private map field for tables that can be represented as hashmaps
 const MAP_FIELD: &str = "__map__";
 
 /// Instantiate a const definition of the contents from a TOML file.

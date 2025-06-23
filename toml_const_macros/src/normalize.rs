@@ -12,16 +12,14 @@
 //! - arrays are empty
 //! - dates are set to `1970-01-01T00:00:00Z`
 
-use std::collections::HashMap;
-
 use indexmap::IndexMap;
 use proc_macro2 as pm2;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{punctuated::Punctuated, Ident, TraitBoundModifier};
+use syn::{punctuated::Punctuated, Ident};
 use toml::value::{Date, Datetime};
 
-use crate::{instantiate::ConstIdentDef, MultipleMacroInput, MAP_FIELD};
+use crate::{instantiate::ConstIdentDef, MAP_FIELD};
 
 const DEFAULT_DATE: Date = Date {
     year: 1970,
@@ -308,15 +306,13 @@ impl TomlValue {
                         let first_key = keys[0].to_string();
 
                         if values.iter().all(|v| first_val == v) {
-                            let new_self = TomlValue::TableMap {
-                                keys: keys,
+                            TomlValue::TableMap {
+                                keys,
                                 first: first_key,
                                 value_type: Box::new(first_val.clone()),
-                            };
-
-                            new_self
+                            }
                         } else {
-                            TomlValue::Table((keys.into_iter()).zip(values.into_iter()).collect())
+                            TomlValue::Table((keys.into_iter()).zip(values).collect())
                         }
                     }
                 }
@@ -557,14 +553,15 @@ impl TomlValue {
                     .collect::<pm2::TokenStream>();
 
                 quote! {
-                    // #[derive(Clone, Copy, Debug)]
-                    // #derives
+                    #[derive(Clone, Copy, Debug)]
+                    #derives
                     pub struct #self_ident {
                         #struct_fields
                     }
 
                     impl #self_ident {
                         #[doc(hidden)]
+                        #[allow(clippy::too_many_arguments)]
                         pub const fn new(
                             #constructor_fields
                         ) -> Self {
@@ -589,7 +586,7 @@ impl TomlValue {
                 let all_field_type = value_type.ty(first, Some(&self_mod));
 
                 let map_field_ident = MAP_FIELD.to_module_ident();
-                let phf_map_type = quote! {toml_const::PhfMap<&'static str, #all_field_type>};
+                let phf_map_type = quote! {::toml_const::PhfMap<&'static str, #all_field_type>};
 
                 // final map field type
                 let map_field = quote! {
@@ -611,12 +608,12 @@ impl TomlValue {
                     .map(|k| {
                         quote! {pub #k}
                     })
-                    .chain([map_field.clone()].into_iter())
+                    .chain([map_field.clone()])
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
                 let constructor_fields = constructor_fields
                     .into_iter()
-                    .chain([map_field].into_iter())
+                    .chain([map_field])
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
                 let derives = derive_attrs
@@ -627,20 +624,21 @@ impl TomlValue {
                 let shorthand_init_fields = keys
                     .iter()
                     .map(|k| k.to_module_ident().to_token_stream())
-                    .chain([map_field_ident.to_token_stream()].into_iter())
+                    .chain([map_field_ident.to_token_stream()])
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
-                let inner_definitions = value_type.definition(&first, derive_attrs);
+                let inner_definitions = value_type.definition(first, derive_attrs);
 
                 quote! {
-                    // #[derive(Clone, Copy, Debug)]
-                    // #derives
+                    #[derive(Clone, Copy, Debug)]
+                    #derives
                     pub struct #self_ident {
                         #struct_fields
                     }
 
                     impl #self_ident {
                         #[doc(hidden)]
+                        #[allow(clippy::too_many_arguments)]
                         pub const fn new(
                             #constructor_fields
                         ) -> Self {
@@ -650,7 +648,7 @@ impl TomlValue {
                         }
 
                         pub const fn map(&'static self) -> &'static #phf_map_type {
-                            &self.#map_field_ident
+                            self.#map_field_ident
                         }
                     }
 
@@ -661,10 +659,6 @@ impl TomlValue {
             }
         }
     }
-}
-
-struct S {
-    __: (),
 }
 
 fn date_time_struct_ident(date: bool, time: bool, offset: bool) -> syn::Ident {

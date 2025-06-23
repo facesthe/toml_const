@@ -4,10 +4,10 @@
 //! The identifier of the struct is used as the struct's type.
 
 use proc_macro2::{self as pm2, Span};
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{punctuated::Punctuated, Ident};
 
-use crate::{TomlValue, MAP_FIELD};
+use crate::TomlValue;
 
 /// Chars to replace when converting to an identifier.
 const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
@@ -27,11 +27,6 @@ pub trait Instantiate {
         toml_value: &TomlValue,
         parents: Vec<&Ident>,
     ) -> pm2::TokenStream;
-}
-
-/// Define a table() method for tables with all values of the same type
-trait DefMap {
-    fn define_map(&self, key: &str, parents: Vec<&Ident>, value: &TomlValue) -> pm2::TokenStream;
 }
 
 /// Create identifiers for variables and types from a string.
@@ -201,10 +196,10 @@ impl Instantiate for toml::Table {
                 let map_vals = keys
                     .iter()
                     .map(|k| {
-                        let key_lit = syn::LitStr::new(&k, Span::call_site());
+                        let key_lit = syn::LitStr::new(k, Span::call_site());
 
                         let value = self.get(k).expect("key should exist in table");
-                        let value = value.instantiate(first, &value_type, parents.clone());
+                        let value = value.instantiate(first, value_type, parents.clone());
 
                         quote! {#key_lit => #value}
                     })
@@ -218,8 +213,8 @@ impl Instantiate for toml::Table {
                 }};
 
                 self.iter()
-                    .map(|(_, f_val)| f_val.instantiate(first, &value_type, parents.clone()))
-                    .chain([map_value].into_iter())
+                    .map(|(_, f_val)| f_val.instantiate(first, value_type, parents.clone()))
+                    .chain([map_value])
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>()
             }
             _ => unimplemented!("expected a table or table map"),

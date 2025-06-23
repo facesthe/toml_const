@@ -53,3 +53,24 @@ versions = [
         { variant = "HDD", size = 512, archive = false },
     ] },
 ]
+
+# 3 distinct table types that are table maps
+[tables]
+c = { aa = 1, ab = 2, ac = 3 }
+a = { ba = 4, bb = 5, bc = 6 }
+b = { ca = 7, cb = 8, cc = 9 }
+
+
+# a table map that has a table map as a value
+[identical_values]
+first = { this = 1 }
+second = { this = 2 }
+third = { this = 3 }
+
+# array of table maps
+[table_map_array]
+map_array = [
+    { name = "Table 1", value = "10" },
+    { name = "Table 2", value = "20 " },
+    { name = "Table 3", value = "30" },
+]

@@ -19,6 +19,7 @@ use toml_const::{toml_const, toml_const_ws};
 
 // workspace root
 // ├── example.toml
+// ├── normalize.toml
 // ├── toml_const       <---- you are here
 // │   ├── Cargo.toml
 // │   └── src
@@ -29,7 +30,7 @@ use toml_const::{toml_const, toml_const_ws};
 // include a TOML file in your project relative to your manifest directory
 toml_const! {
     /// Docstring for this item
-    #[derive(PartialEq, PartialOrd)] // Clone, Copy, Debug are already derived
+    #[derive(PartialEq)] // Clone, Copy, Debug are already derived
     pub const EXAMPLE_TOML: "../example.toml";
     // multiple definitions are supported
     static CARGO_TOML: "Cargo.toml";
@@ -110,6 +111,40 @@ versions = [
 ]
 ```
 
+## Hashmaps
+
+A table that contains identical keys will implement a `const map()` method that returns `&phf::OrderedMap`.
+
+This feature is included by default under the feature flag `"phf"`. You can opt to disable it by adding `default-features = false` to this dependency.
+
+```rust
+use toml_const::toml_const;
+
+toml_const! {
+    #[derive(PartialEq)]
+    pub const NORMALIZE_TOML: "../normalize.toml";
+}
+
+// keys can be accessed through struct fields as usual
+let first_value = NORMALIZE_TOML.identical_values.first;
+let second_value = NORMALIZE_TOML.identical_values.second;
+
+let map = NORMALIZE_TOML.identical_values.map();
+for (key, value) in map.into_iter() {
+
+    // they are the same type
+    let _ = &first_value == value;
+
+    // in this case, the inner value also contains a hashmap
+    println!("{}: {:?}", key, value);
+
+    for (inner_key, inner_value) in value.map().into_iter() {
+        // this will print the inner key and value
+        println!("\t{}: {:?}", inner_key, inner_value);
+    }
+}
+```
+
 ## Unwrapping datetime
 
 `toml::Datetime` contains fields that point to `Option`s, which need const/runtime checks.
@@ -132,7 +167,7 @@ toml_const! {
     ///
     /// This file contains
     /// - something
-    #[derive(PartialEq, Hash)]
+    #[derive(PartialEq)]
     pub const CARGO_TOML: "Cargo.toml";
 }
 ```
@@ -145,6 +180,7 @@ It **will fail to**:
 
 - generate arrays with distinct types (arrays containing different types, arrays of tables with conflicting key types)
 - create a struct from a table with a blank key `"" = true`
+- parse reserved keys (`__map__` is reserved cannot be used as a key)
 
 It **will modify**:
 

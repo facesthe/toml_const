@@ -9,6 +9,9 @@ license = "MIT"
 keywords = []
 categories = ["development-tools::build-utils"]
 
+[features]
+phf = []
+
 [lib]
 proc-macro = true
 
@@ -17,3 +20,4 @@ syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
 toml = { workspace = true }
+indexmap = { workspace = true }

@@ -7,6 +7,8 @@ use proc_macro2::{self as pm2, Span};
 use quote::quote;
 use syn::{punctuated::Punctuated, Ident};
 
+use crate::TomlValue;
+
 /// Chars to replace when converting to an identifier.
 const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
 
@@ -19,7 +21,12 @@ const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
 ///
 /// This is basically a wrapper around [quote::ToTokens].
 pub trait Instantiate {
-    fn instantiate(&self, key: &str, parents: Vec<&Ident>) -> pm2::TokenStream;
+    fn instantiate(
+        &self,
+        key: &str,
+        toml_value: &TomlValue,
+        parents: Vec<&Ident>,
+    ) -> pm2::TokenStream;
 }
 
 /// Create identifiers for variables and types from a string.
@@ -126,7 +133,12 @@ where
 }
 
 impl Instantiate for toml::Value {
-    fn instantiate(&self, key: &str, parents: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(
+        &self,
+        key: &str,
+        toml_value: &TomlValue,
+        parents: Vec<&Ident>,
+    ) -> proc_macro2::TokenStream {
         use toml::Value::*;
 
         match self {
@@ -137,15 +149,20 @@ impl Instantiate for toml::Value {
             Boolean(val) => quote! { #val },
 
             // items with inner impls
-            Datetime(datetime) => datetime.instantiate(key, vec![]),
-            Array(values) => values.instantiate(key, parents),
-            Table(map) => map.instantiate(key, parents),
+            Datetime(datetime) => datetime.instantiate(key, toml_value, vec![]),
+            Array(values) => values.instantiate(key, toml_value, parents),
+            Table(map) => map.instantiate(key, toml_value, parents),
         }
     }
 }
 
 impl Instantiate for toml::Table {
-    fn instantiate(&self, key: &str, parents: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(
+        &self,
+        key: &str,
+        toml_value: &TomlValue,
+        parents: Vec<&Ident>,
+    ) -> proc_macro2::TokenStream {
         let table_type = key.to_type_ident();
         let table_mod = key.to_module_ident();
 
@@ -162,29 +179,72 @@ impl Instantiate for toml::Table {
         let mut parents = parents.clone();
         parents.push(&table_mod);
 
-        let fields = self
-            .iter()
-            .map(|(f_key, f_val)| {
-                let value = f_val.instantiate(f_key, parents.clone());
-                let key = f_key.to_module_ident();
+        let new_params = match toml_value {
+            TomlValue::Table(tab) => self
+                .iter()
+                .map(|(f_key, f_val)| {
+                    let inner_val = tab.get(f_key).expect("key should exist in table");
 
-                quote! { #key : #value}
-            })
-            .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+                    f_val.instantiate(f_key, inner_val, parents.clone())
+                })
+                .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>(),
+            TomlValue::TableMap {
+                keys,
+                first,
+                value_type,
+            } => {
+                let map_vals = keys
+                    .iter()
+                    .map(|k| {
+                        let key_lit = syn::LitStr::new(k, Span::call_site());
+
+                        let value = self.get(k).expect("key should exist in table");
+                        let value = value.instantiate(first, value_type, parents.clone());
+
+                        quote! {#key_lit => #value}
+                    })
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
+
+                let map_value = quote! {{
+                    use toml_const::phf;
+                    &toml_const::phf_map_macro! {
+                        #map_vals
+                    }
+                }};
+
+                self.iter()
+                    .map(|(_, f_val)| f_val.instantiate(first, value_type, parents.clone()))
+                    .chain([map_value])
+                    .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>()
+            }
+            _ => unimplemented!("expected a table or table map"),
+        };
 
         quote! {
-            #table_ty {
-                #fields
-            }
+            #table_ty::new(
+                #new_params
+            )
         }
     }
 }
 
 impl Instantiate for toml::value::Array {
-    fn instantiate(&self, key: &str, parents: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(
+        &self,
+        key: &str,
+        toml_value: &TomlValue,
+        parents: Vec<&Ident>,
+    ) -> proc_macro2::TokenStream {
+        let arr = if let TomlValue::Array(arr) = toml_value {
+            arr
+        } else {
+            unimplemented!("expected a toml array value");
+        };
+
         let elements = self
             .iter()
-            .map(|elem| elem.instantiate(key, parents.clone()))
+            .zip(arr.iter())
+            .map(|(elem, toml_val_inner)| elem.instantiate(key, toml_val_inner, parents.clone()))
             .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
         quote! {
@@ -195,12 +255,12 @@ impl Instantiate for toml::value::Array {
 
 // datetime structs do not require a key, as they are already defined.
 impl Instantiate for toml::value::Datetime {
-    fn instantiate(&self, k: &str, _: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(&self, k: &str, _: &TomlValue, _: Vec<&Ident>) -> proc_macro2::TokenStream {
         match (self.date, self.time, self.offset) {
             (Some(d), Some(t), Some(o)) => {
-                let d = d.instantiate(k, vec![]);
-                let t = t.instantiate(k, vec![]);
-                let o = o.instantiate(k, vec![]);
+                let d = d.instantiate(k, &TomlValue::Boolean, vec![]);
+                let t = t.instantiate(k, &TomlValue::Boolean, vec![]);
+                let o = o.instantiate(k, &TomlValue::Boolean, vec![]);
 
                 quote! {
                     toml_const::OffsetDateTime {
@@ -211,8 +271,8 @@ impl Instantiate for toml::value::Datetime {
                 }
             }
             (Some(d), Some(t), None) => {
-                let d = d.instantiate(k, vec![]);
-                let t = t.instantiate(k, vec![]);
+                let d = d.instantiate(k, &TomlValue::Boolean, vec![]);
+                let t = t.instantiate(k, &TomlValue::Boolean, vec![]);
 
                 quote! {
                     toml_const::LocalDateTime {
@@ -222,7 +282,7 @@ impl Instantiate for toml::value::Datetime {
                 }
             }
             (Some(d), None, None) => {
-                let d = d.instantiate(k, vec![]);
+                let d = d.instantiate(k, &TomlValue::Boolean, vec![]);
 
                 quote! {
                     toml_const::LocalDate {
@@ -231,7 +291,7 @@ impl Instantiate for toml::value::Datetime {
                 }
             }
             (None, Some(t), None) => {
-                let t = t.instantiate(k, vec![]);
+                let t = t.instantiate(k, &TomlValue::Boolean, vec![]);
 
                 quote! {
                     toml_const::LocalTime {
@@ -247,7 +307,7 @@ impl Instantiate for toml::value::Datetime {
 
 // sub structs do not require key, they implement `Key::Element`.
 impl Instantiate for toml::value::Date {
-    fn instantiate(&self, _: &str, _: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(&self, _: &str, _: &TomlValue, _: Vec<&Ident>) -> proc_macro2::TokenStream {
         let year = self.year;
         let month = self.month;
         let day = self.day;
@@ -263,7 +323,7 @@ impl Instantiate for toml::value::Date {
 }
 
 impl Instantiate for toml::value::Time {
-    fn instantiate(&self, _: &str, _: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(&self, _: &str, _: &TomlValue, _: Vec<&Ident>) -> proc_macro2::TokenStream {
         let hour = self.hour;
         let minute = self.minute;
         let second = self.second;
@@ -281,7 +341,7 @@ impl Instantiate for toml::value::Time {
 }
 
 impl Instantiate for toml::value::Offset {
-    fn instantiate(&self, _: &str, _: Vec<&Ident>) -> proc_macro2::TokenStream {
+    fn instantiate(&self, _: &str, _: &TomlValue, _: Vec<&Ident>) -> proc_macro2::TokenStream {
         match self {
             toml::value::Offset::Z => quote! { toml_const::Offset::Z },
             toml::value::Offset::Custom { minutes } => quote! {
@@ -303,9 +363,10 @@ mod tests {
     fn test_instantiation() {
         let cargo_manifest = include_str!("../Cargo.toml");
         let toml: toml::Table = toml::Table::from_str(cargo_manifest).unwrap();
+        let value: TomlValue = toml.clone().into();
 
         let root_ident = Ident::new("ROOT_TABLE", Span::call_site());
-        let instantiation = toml.instantiate(&root_ident.to_string(), vec![]);
+        let instantiation = toml.instantiate(&root_ident.to_string(), &value, vec![]);
 
         println!("Table instantiation: {}", instantiation);
     }

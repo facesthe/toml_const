@@ -15,6 +15,8 @@ use syn::parse_macro_input;
 
 use crate::{instantiate::ConstIdentDef, normalize::TomlValue};
 
+const MAP_FIELD: &str = "__map__";
+
 /// Instantiate a const definition of the contents from a TOML file.
 ///
 /// This macro resolves paths relative to the first parent directory containing a `Cargo.toml` file.
@@ -149,6 +151,7 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
                 .into()
         }
     };
+    let toml_val_table = toml_val_table.reduce();
 
     let mut toml_table_val = toml::Value::Table(toml_table);
     toml_val_table.normalize_toml(&mut toml_table_val);
@@ -165,7 +168,8 @@ pub fn toml_const_inner(input: pm::TokenStream) -> pm::TokenStream {
 
     let table_definitions = toml_val_table.definition(&input.item_ident.to_string(), &derive_attrs);
 
-    let instantiation = toml_table.instantiate(&input.item_ident.to_string(), vec![]);
+    let instantiation =
+        toml_table.instantiate(&input.item_ident.to_string(), &toml_val_table, vec![]);
 
     let pub_token = if input.is_pub {
         quote! {pub}

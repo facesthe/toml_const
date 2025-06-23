@@ -14,13 +14,14 @@
 
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
 use proc_macro2 as pm2;
 use proc_macro2::Span;
-use quote::quote;
-use syn::Ident;
+use quote::{quote, ToTokens};
+use syn::{Ident, TraitBoundModifier};
 use toml::value::{Date, Datetime};
 
-use crate::instantiate::ConstIdentDef;
+use crate::{instantiate::ConstIdentDef, MultipleMacroInput, MAP_FIELD};
 
 const DEFAULT_DATE: Date = Date {
     year: 1970,
@@ -62,7 +63,15 @@ pub enum TomlValue {
         offset: bool,
     },
     Array(Vec<TomlValue>),
-    Table(HashMap<String, TomlValue>),
+    Table(IndexMap<String, TomlValue>),
+
+    /// A table map is a subset of a table that contains identical values for all keys.
+    TableMap {
+        keys: Vec<String>,
+        /// The key that table and array types inherit
+        first: String,
+        value_type: Box<TomlValue>,
+    },
 }
 
 impl std::error::Error for NormalizationError {
@@ -120,6 +129,13 @@ impl From<TomlValue> for toml::Value {
             TomlValue::Table(sub_table) => {
                 toml::Value::Table(sub_table.into_iter().map(|(k, v)| (k, v.into())).collect())
             }
+            TomlValue::TableMap {
+                keys, value_type, ..
+            } => toml::Value::Table(
+                keys.into_iter()
+                    .map(|k| (k, (*value_type.clone()).into()))
+                    .collect(),
+            ),
         }
     }
 }
@@ -204,7 +220,26 @@ impl TomlValue {
                     }
                 }
             }
-
+            (
+                TomlValue::TableMap {
+                    keys, value_type, ..
+                },
+                toml::Value::Table(map),
+            ) => {
+                for key in keys {
+                    match (map.get_mut(key), value_type.as_ref()) {
+                        (Some(toml_value), _) => {
+                            value_type.normalize_toml(toml_value);
+                        }
+                        (None, TomlValue::Array(_)) => {
+                            map.insert(key.to_owned(), toml::Value::Array(vec![]));
+                        }
+                        (None, _) => {
+                            map.insert(key.to_owned(), (*value_type.clone()).into());
+                        }
+                    }
+                }
+            }
             _ => unimplemented!("normalizing different types cannot be done"),
         }
     }
@@ -212,11 +247,12 @@ impl TomlValue {
     /// Derive a normalized version of [Self].
     ///
     /// At this point, the schema of [Self] will be superset of the original.
-    pub fn normalize(&self) -> Result<Self, NormalizationError> {
+    pub fn normalize(self) -> Result<Self, NormalizationError> {
         match self {
             TomlValue::Array(toml_values) => match toml_values.first() {
                 Some(first) => {
-                    let normalized = toml_values.iter().try_fold(first.clone(), |acc, item| {
+                    let first_val = first.clone();
+                    let normalized = toml_values.into_iter().try_fold(first_val, |acc, item| {
                         let inter = item.normalize()?;
                         acc.union(&inter)
                     })?;
@@ -228,25 +264,69 @@ impl TomlValue {
 
             TomlValue::Table(toml_table) => {
                 let norm_table = toml_table
-                    .iter()
+                    .into_iter()
                     .map(|(k, v)| {
                         let normalized_value = v.normalize();
                         match normalized_value {
                             Ok(nv) => Ok((k.clone(), nv)),
-                            Err(e) => Err(e.propagate(k)),
+                            Err(e) => Err(e.propagate(&k)),
                         }
                     })
-                    .collect::<Result<HashMap<String, TomlValue>, NormalizationError>>()?;
+                    .collect::<Result<IndexMap<String, TomlValue>, NormalizationError>>()?;
 
                 Ok(TomlValue::Table(norm_table))
             }
 
             TomlValue::Datetime { date, time, offset } => {
-                Ok(Self::resolve_date_time_offset(*date, *time, *offset))
+                Ok(Self::resolve_date_time_offset(date, time, offset))
             }
 
             // everything else is already normalized
-            other => Ok(other.clone()),
+            other => Ok(other),
+        }
+    }
+
+    /// Transform tables with identical values to table maps
+    pub fn reduce(self) -> Self {
+        match self {
+            TomlValue::Table(tab) => {
+                match tab.len() {
+                    0 => TomlValue::Table(tab),
+                    _ => {
+                        // reduce inner first
+                        let reduced_inner = tab
+                            .into_iter()
+                            .map(|(k, v)| (k, v.reduce()))
+                            .collect::<IndexMap<_, _>>();
+
+                        // let mut key_values = reduced_inner.iter();
+                        // let (first_key, first_value) =
+                        //     key_values.next().expect("already checked for empty table");
+
+                        let (keys, values): (Vec<_>, Vec<_>) = reduced_inner.into_iter().unzip();
+                        let first_val = &values[0];
+                        let first_key = keys[0].to_string();
+
+                        if values.iter().all(|v| first_val == v) {
+                            let new_self = TomlValue::TableMap {
+                                keys: keys,
+                                first: first_key,
+                                value_type: Box::new(first_val.clone()),
+                            };
+
+                            new_self
+                        } else {
+                            TomlValue::Table((keys.into_iter()).zip(values.into_iter()).collect())
+                        }
+                    }
+                }
+            }
+
+            TomlValue::Array(arr) => {
+                TomlValue::Array(arr.into_iter().map(|a| a.reduce()).collect())
+            }
+            // no need to reduce primitive types
+            other => other,
         }
     }
 
@@ -376,20 +456,24 @@ impl TomlValue {
                     None => quote! { &'static [&'static str] },
                 }
             }
-            TomlValue::Table(_) => {
+            TomlValue::Table(_) | TomlValue::TableMap { .. } => {
                 let self_type = key.to_type_ident();
 
                 match parent_mod {
                     Some(parent) => quote! { #parent :: #self_type },
                     None => quote! { #self_type },
                 }
-            }
+            } // TomlValue::TableMap { keys, value_type } => {
+              //     // &value_type.ty(key, parent_mod)
+
+              //     todo!()
+              // }
         }
     }
 
     /// Recursively define array and table types.
     ///
-    /// `Self` should be normalized first.
+    /// `Self` should be normalized and reduced first.
     pub fn definition(&self, key: &str, derive_attrs: &[syn::Attribute]) -> pm2::TokenStream {
         match self {
             // do not need to define primitive/provided types
@@ -399,7 +483,7 @@ impl TomlValue {
             | TomlValue::Boolean
             | TomlValue::Datetime { .. } => quote! {},
 
-            Self::Array(arr) => match arr.len() {
+            TomlValue::Array(arr) => match arr.len() {
                 0 => quote! {}, // instantiated as bool array
                 1 => {
                     let inner_value = &arr[0];
@@ -408,9 +492,24 @@ impl TomlValue {
                 }
                 _ => unimplemented!("normalized array should have 0 or 1 elements"),
             },
-            Self::Table(tab) => {
+            TomlValue::Table(tab) => {
                 let self_ident = key.to_type_ident();
                 let self_mod = key.to_module_ident();
+
+                // // we make the identifier in all values the same type, if all values in the table are the same.
+                // let same_val_type = match tab.len() {
+                //     0 => None,
+                //     _ => {
+                //         let mut key_vals = tab.iter();
+                //         let (first_key, first_val) =
+                //             key_vals.next().expect("already checked for empty table");
+
+                //         match key_vals.all(|(_, v)| v == first_val) {
+                //             true => Some(first_val.ty(first_key, Some(&self_mod))),
+                //             false => None,
+                //         }
+                //     }
+                // };
 
                 // let mut x = 0;
 
@@ -431,7 +530,12 @@ impl TomlValue {
 
                 let inner_definitions = tab
                     .iter()
-                    .filter(|(_, v)| matches!(v, TomlValue::Array(_) | TomlValue::Table(_)))
+                    .filter(|(_, v)| {
+                        matches!(
+                            v,
+                            TomlValue::Array(_) | TomlValue::Table(_) | TomlValue::TableMap { .. }
+                        )
+                    })
                     .map(|(k, v)| v.definition(k, derive_attrs))
                     .collect::<pm2::TokenStream>();
 
@@ -442,8 +546,8 @@ impl TomlValue {
 
                 quote! {
                     // table definition
-                    #[derive(Clone, Copy, Debug)]
-                    #derives
+                    // #[derive(Clone, Copy, Debug)]
+                    // #derives
                     pub struct #self_ident {
                         #fields
                     }
@@ -453,8 +557,66 @@ impl TomlValue {
                     }
                 }
             }
+            TomlValue::TableMap {
+                keys,
+                first,
+                value_type,
+            } => {
+                let self_ident = key.to_type_ident();
+                let self_mod = key.to_module_ident();
+                let all_field_type = value_type.ty(first, Some(&self_mod));
+
+                let map_field_ident = MAP_FIELD.to_module_ident();
+                let phf_map_type = quote! {toml_const::PhfMap<&'static str, #all_field_type>};
+
+                // final map field type
+                let map_field = quote! {
+                    #[automatically_derived]
+                    pub #map_field_ident: &'static #phf_map_type,
+                };
+
+                let fields = keys
+                    .iter()
+                    .map(|k| {
+                        let field_ident = k.to_module_ident();
+                        quote! {
+                            pub #field_ident: #all_field_type,
+                        }
+                    })
+                    .chain([map_field].into_iter())
+                    .collect::<pm2::TokenStream>();
+
+                let derives = derive_attrs
+                    .iter()
+                    .map(|attr| quote! { #attr })
+                    .collect::<pm2::TokenStream>();
+
+                let inner_definitions = value_type.definition(&first, derive_attrs);
+
+                quote! {
+                    // #[derive(Clone, Copy, Debug)]
+                    // #derives
+                    pub struct #self_ident {
+                        #fields
+                    }
+
+                    impl #self_ident {
+                        pub const fn map(&'static self) -> &'static #phf_map_type {
+                            &self.#map_field_ident
+                        }
+                    }
+
+                    pub mod #self_mod {
+                        #inner_definitions
+                    }
+                }
+            }
         }
     }
+}
+
+struct S {
+    __: (),
 }
 
 fn date_time_struct_ident(date: bool, time: bool, offset: bool) -> syn::Ident {
@@ -592,5 +754,19 @@ mod tests {
                 }
             },
         };
+    }
+
+    #[test]
+    fn test_show_tablemap_normalize() {
+        let normalize_toml = include_str!("../../normalize.toml");
+        let parsed = toml::Table::from_str(normalize_toml).expect("must parse");
+
+        let toml_val = TomlValue::from(parsed.clone());
+        let normalized = toml_val.normalize().expect("must normalize");
+
+        let reduced = normalized.reduce();
+        println!("reduced: {:#?}", reduced);
+
+        // println!("normalized: {:#?}", normalized);
     }
 }

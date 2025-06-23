@@ -6,6 +6,14 @@ pub use datetime::*;
 pub use macros::*;
 pub use toml::value::{Date, Datetime, Offset, Time};
 
+#[cfg(feature = "phf")]
+#[doc(hidden)]
+pub use phf;
+#[cfg(feature = "phf")]
+pub use phf::phf_ordered_map as phf_map_macro;
+#[cfg(feature = "phf")]
+pub use phf::OrderedMap as PhfMap;
+
 /// Destructured datetime structs
 mod datetime {
     use super::*;

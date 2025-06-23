@@ -6,3 +6,5 @@ rust-version.workspace = true
 
 [dependencies]
 toml_const = { path = "../toml_const" }
+toml = { workspace = true }
+# phf = "0.12"

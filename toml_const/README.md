@@ -115,6 +115,8 @@ versions = [
 
 A table that contains identical keys will implement a `const map()` method that returns `&phf::OrderedMap`.
 
+This feature is included by default under the feature flag `"phf"`. You can opt to disable it by adding `default-features = false` to this dependency.
+
 ```rust
 use toml_const::toml_const;
 

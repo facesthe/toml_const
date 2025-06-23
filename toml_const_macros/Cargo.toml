@@ -9,6 +9,9 @@ license = "MIT"
 keywords = []
 categories = ["development-tools::build-utils"]
 
+[features]
+phf = []
+
 [lib]
 proc-macro = true
 

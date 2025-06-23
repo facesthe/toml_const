@@ -285,6 +285,7 @@ impl TomlValue {
     }
 
     /// Transform tables with identical values to table maps
+    #[cfg(feature = "phf")]
     pub fn reduce(self) -> Self {
         match self {
             TomlValue::Table(tab) => {
@@ -324,6 +325,11 @@ impl TomlValue {
             // no need to reduce primitive types
             other => other,
         }
+    }
+
+    #[cfg(not(feature = "phf"))]
+    pub fn reduce(self) -> Self {
+        self
     }
 
     /// Calculate the union of two [TomlValue] types.

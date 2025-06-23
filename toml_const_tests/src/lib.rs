@@ -21,17 +21,17 @@ toml_const::toml_const! {
 
 #[cfg(test)]
 mod tests {
-    // use crate::NORMALIZE_TOML;
+    use crate::NORMALIZE_TOML;
 
-    // #[test]
-    // fn test_print_nornalize() {
-    //     let toml: toml::Table = toml::from_str(include_str!("../../normalize.toml")).unwrap();
+    #[test]
+    fn test_print_nornalize() {
+        let toml: toml::Table = toml::from_str(include_str!("../../normalize.toml")).unwrap();
 
-    //     println!("{:#?}", toml);
-    //     // println!("{:#?}", NORMALIZE_TOML.identical_values.map());
+        println!("{:#?}", toml);
+        // println!("{:#?}", NORMALIZE_TOML.identical_values.map());
 
-    //     for item in NORMALIZE_TOML.identical_values.map().into_iter() {
-    //         println!("{}: {:?}", item.0, item.1);
-    //     }
-    // }
+        for item in NORMALIZE_TOML.identical_values.map().into_iter() {
+            println!("{}: {:?}", item.0, item.1);
+        }
+    }
 }

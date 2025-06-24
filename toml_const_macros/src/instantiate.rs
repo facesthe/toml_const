@@ -180,12 +180,12 @@ impl Instantiate for toml::Table {
         parents.push(&table_mod);
 
         let new_params = match toml_value {
-            TomlValue::Table(tab) => self
+            TomlValue::Table(tab) => tab
                 .iter()
-                .map(|(f_key, f_val)| {
-                    let inner_val = tab.get(f_key).expect("key should exist in table");
+                .map(|(key, val)| {
+                    let inner_val = self.get(key).expect("key should exist in table");
 
-                    f_val.instantiate(f_key, inner_val, parents.clone())
+                    inner_val.instantiate(key, val, parents.clone())
                 })
                 .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>(),
             TomlValue::TableMap {
@@ -241,10 +241,14 @@ impl Instantiate for toml::value::Array {
             unimplemented!("expected a toml array value");
         };
 
+        let val = match arr.first() {
+            Some(v) => v,
+            None => return quote! { &[] },
+        };
+
         let elements = self
             .iter()
-            .zip(arr.iter())
-            .map(|(elem, toml_val_inner)| elem.instantiate(key, toml_val_inner, parents.clone()))
+            .map(|elem| elem.instantiate(key, val, parents.clone()))
             .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
         quote! {

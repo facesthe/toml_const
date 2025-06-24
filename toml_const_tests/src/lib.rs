@@ -33,5 +33,13 @@ mod tests {
         for item in NORMALIZE_TOML.identical_values.map().into_iter() {
             println!("{}: {:?}", item.0, item.1);
         }
+
+        println!("{:?}", NORMALIZE_TOML.items)
+    }
+
+    #[test]
+    fn test_arrays_preserve_original_len() {
+        assert!(NORMALIZE_TOML.items.len() > 1);
+        assert!(NORMALIZE_TOML.table_map_array.map_array.len() > 1);
     }
 }

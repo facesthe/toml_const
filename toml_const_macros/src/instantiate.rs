@@ -10,7 +10,9 @@ use syn::{punctuated::Punctuated, Ident};
 use crate::TomlValue;
 
 /// Chars to replace when converting to an identifier.
-const REPLACE_CHARS: &[char] = &[' ', '-', '_', ':', '.', '/', '\\', '"'];
+const REPLACE_CHARS: &[char] = &[
+    ' ', '-', '_', ':', '.', '/', '\\', '"', '\'', '(', ')', '=', ',',
+];
 
 /// Generate the instantiation of an item. This can be a custom struct or a simple value.
 /// If a key is provided, the instantiation will be in a field-value pair.
@@ -400,5 +402,23 @@ mod tests {
         });
 
         println!("inter: {inter}");
+    }
+
+    #[test]
+    fn test_cfg_identifiers() {
+        let key = "cfg(any(target_os = \"android\", target_os = \"ios\"))";
+        let var = key.to_variable_ident();
+        let ty = key.to_type_ident();
+        assert_eq!(
+            var.to_string(),
+            "CFG_ANY_TARGET_OS____ANDROID___TARGET_OS____IOS___"
+        );
+        assert_eq!(ty.to_string(), "CfgAnyTargetOsAndroidTargetOsIos");
+
+        let simple_key = "cfg(unix)";
+        let var_simple = simple_key.to_variable_ident();
+        let ty_simple = simple_key.to_type_ident();
+        assert_eq!(var_simple.to_string(), "CFG_UNIX_");
+        assert_eq!(ty_simple.to_string(), "CfgUnix");
     }
 }

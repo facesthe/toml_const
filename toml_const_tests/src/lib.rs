@@ -16,6 +16,8 @@ toml_const::toml_const_ws! {pub static TOML_CONST_EXAMPLE_WS: "./example.toml"; 
 
 toml_const::toml_const! {
     #[derive(PartialEq)]
+    #[instance(allow(unused))]
+    #[define(allow(unused))]
     const NORMALIZE_TOML: "../normalize.toml";
 }
 

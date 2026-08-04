@@ -437,7 +437,12 @@ impl TomlValue {
 
     /// Return the type of a value.
     /// Arrays will descend and return their inner type.
-    fn ty(&self, key: &str, parent_mod: Option<&Ident>) -> pm2::TokenStream {
+    fn ty(
+        &self,
+        key: &str,
+        parent_mod: Option<&Ident>,
+        runtime_path: &syn::Path,
+    ) -> pm2::TokenStream {
         match self {
             TomlValue::String => quote! {&'static str},
             TomlValue::Integer => quote! {i64},
@@ -445,12 +450,12 @@ impl TomlValue {
             TomlValue::Boolean => quote! {bool},
             TomlValue::Datetime { date, time, offset } => {
                 let dt_ident = date_time_struct_ident(*date, *time, *offset);
-                quote! { toml_const :: #dt_ident }
+                quote! { #runtime_path :: #dt_ident }
             }
             TomlValue::Array(toml_values) => {
                 match toml_values.first() {
                     Some(inner) => {
-                        let inner_type = inner.ty(key, parent_mod);
+                        let inner_type = inner.ty(key, parent_mod, runtime_path);
 
                         quote! { &'static [#inner_type] }
                     }
@@ -476,7 +481,12 @@ impl TomlValue {
     /// Recursively define array and table types.
     ///
     /// `Self` should be normalized and reduced first.
-    pub fn definition(&self, key: &str, derive_attrs: &[syn::Attribute]) -> pm2::TokenStream {
+    pub fn definition(
+        &self,
+        key: &str,
+        derive_attrs: &[syn::Attribute],
+        runtime_path: &syn::Path,
+    ) -> pm2::TokenStream {
         match self {
             // do not need to define primitive/provided types
             TomlValue::String
@@ -490,7 +500,7 @@ impl TomlValue {
                 1 => {
                     let inner_value = &arr[0];
 
-                    inner_value.definition(key, derive_attrs)
+                    inner_value.definition(key, derive_attrs, runtime_path)
                 }
                 _ => unimplemented!("normalized array should have 0 or 1 elements"),
             },
@@ -522,7 +532,7 @@ impl TomlValue {
                         // let field_ident = k.to_variable_ident();
                         let field_ident = k.to_module_ident();
 
-                        let field_type = v.ty(k, Some(&self_mod));
+                        let field_type = v.ty(k, Some(&self_mod), runtime_path);
 
                         quote! {
                             #field_ident: #field_type
@@ -545,7 +555,7 @@ impl TomlValue {
                             TomlValue::Array(_) | TomlValue::Table(_) | TomlValue::TableMap { .. }
                         )
                     })
-                    .map(|(k, v)| v.definition(k, derive_attrs))
+                    .map(|(k, v)| v.definition(k, derive_attrs, runtime_path))
                     .collect::<pm2::TokenStream>();
 
                 let shorthand_init_fields = tab
@@ -589,10 +599,10 @@ impl TomlValue {
             } => {
                 let self_ident = key.to_type_ident();
                 let self_mod = key.to_module_ident();
-                let all_field_type = value_type.ty(first, Some(&self_mod));
+                let all_field_type = value_type.ty(first, Some(&self_mod), runtime_path);
 
                 let map_field_ident = MAP_FIELD.to_module_ident();
-                let phf_map_type = quote! {::toml_const::PhfMap<&'static str, #all_field_type>};
+                let phf_map_type = quote! {#runtime_path::PhfMap<&'static str, #all_field_type>};
 
                 // final map field type
                 let map_field = quote! {
@@ -633,7 +643,7 @@ impl TomlValue {
                     .chain([map_field_ident.to_token_stream()])
                     .collect::<Punctuated<pm2::TokenStream, syn::Token![,]>>();
 
-                let inner_definitions = value_type.definition(first, derive_attrs);
+                let inner_definitions = value_type.definition(first, derive_attrs, runtime_path);
 
                 quote! {
                     #[derive(Clone, Copy, Debug)]
@@ -735,7 +745,11 @@ mod tests {
 
         println!(
             "definition: {}",
-            normalized.definition("TOP_LEVEL_TABLE", &[])
+            normalized.definition(
+                "TOP_LEVEL_TABLE",
+                &[],
+                &syn::parse_str("toml_const").expect("valid path"),
+            )
         );
     }
 

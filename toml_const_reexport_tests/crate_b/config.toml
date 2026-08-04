@@ -1,0 +1,8 @@
+name = "test"
+date = 2024-01-02T03:04:05Z
+
+[servers.alpha]
+port = 8080
+
+[servers.beta]
+port = 8081

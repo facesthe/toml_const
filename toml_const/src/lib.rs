@@ -14,6 +14,27 @@ pub use phf::phf_ordered_map as phf_map_macro;
 #[cfg(feature = "phf")]
 pub use phf::OrderedMap as PhfMap;
 
+/// Instantiate a const definition of the contents from a TOML file.
+///
+/// This macro resolves paths relative to the first parent directory containing a `Cargo.toml` file.
+#[macro_export]
+macro_rules! toml_const {
+    ($($input:tt)*) => {
+        $crate::__toml_const! { $crate; $($input)* }
+    };
+}
+
+/// Instantiate a const definition of the contents from a TOML file.
+///
+/// If this macro is used in a workspace, it will resolve paths relative to the workspace's `Cargo.toml`.
+/// If this macro is used in a crate, it will resolve paths relative to the crate's `Cargo.toml`.
+#[macro_export]
+macro_rules! toml_const_ws {
+    ($($input:tt)*) => {
+        $crate::__toml_const_ws! { $crate; $($input)* }
+    };
+}
+
 /// Destructured datetime structs
 mod datetime {
     use super::*;

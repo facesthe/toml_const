@@ -1,0 +1,8 @@
+[package]
+name = "toml_const_reexport_test_b"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+toml_const_reexport_test_a = { path = "../crate_a" }

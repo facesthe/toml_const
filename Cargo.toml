@@ -1,5 +1,11 @@
 [workspace]
-members = ["toml_const", "toml_const_macros", "toml_const_tests"]
+members = [
+    "toml_const",
+    "toml_const_macros",
+    "toml_const_tests",
+    "toml_const_reexport_tests/crate_a",
+    "toml_const_reexport_tests/crate_b",
+]
 resolver = "2"
 
 [workspace.package]
